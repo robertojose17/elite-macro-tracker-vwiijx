@@ -1,12 +1,14 @@
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { mockFoods } from '@/data/mockData';
+import { searchInternalFoods, getRecentFoods, getFavoriteFoods, upsertFood } from '@/utils/foodDatabase';
+import { searchProducts, mapOpenFoodFactsToFood } from '@/utils/openFoodFacts';
+import { Food } from '@/types';
 
 export default function AddFoodScreen() {
   const router = useRouter();
@@ -19,16 +21,97 @@ export default function AddFoodScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'favorites' | 'all'>('recent');
   const [showCopyModal, setShowCopyModal] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [recentFoods, setRecentFoods] = useState<Food[]>([]);
+  const [favoriteFoods, setFavoriteFoods] = useState<Food[]>([]);
 
-  const filteredFoods = mockFoods.filter(food =>
-    food.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (food.brand && food.brand.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  useEffect(() => {
+    loadInitialData();
+  }, []);
 
-  const recentFoods = filteredFoods.slice(0, 5);
-  const favoriteFoods = filteredFoods.filter(food => food.is_favorite);
+  useEffect(() => {
+    if (searchQuery.length > 0) {
+      performSearch();
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
 
-  const displayFoods = activeTab === 'recent' ? recentFoods : activeTab === 'favorites' ? favoriteFoods : filteredFoods;
+  const loadInitialData = async () => {
+    try {
+      const recent = await getRecentFoods();
+      const favorites = await getFavoriteFoods();
+      setRecentFoods(recent);
+      setFavoriteFoods(favorites);
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    }
+  };
+
+  const performSearch = async () => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    console.log(`[Search] Searching for: ${searchQuery}`);
+
+    try {
+      // Step 1: Search internal database
+      const internalResults = await searchInternalFoods(searchQuery);
+      console.log(`[Search] Internal results: ${internalResults.length}`);
+
+      // Step 2: Search OpenFoodFacts
+      const externalData = await searchProducts(searchQuery, 1, 15);
+      const externalResults = externalData?.products
+        ? externalData.products.map(mapOpenFoodFactsToFood)
+        : [];
+      console.log(`[Search] External results: ${externalResults.length}`);
+
+      // Step 3: Merge and deduplicate results
+      const mergedResults = mergeResults(internalResults, externalResults);
+      console.log(`[Search] Merged results: ${mergedResults.length}`);
+
+      setSearchResults(mergedResults);
+    } catch (error) {
+      console.error('[Search] Error performing search:', error);
+      // Show internal results only if external search fails
+      const internalResults = await searchInternalFoods(searchQuery);
+      setSearchResults(internalResults);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const mergeResults = (internal: Food[], external: any[]): any[] => {
+    // Create a map of internal foods by barcode for quick lookup
+    const internalByBarcode = new Map<string, Food>();
+    internal.forEach(food => {
+      if (food.barcode) {
+        internalByBarcode.set(food.barcode, food);
+      }
+    });
+
+    // Filter external results to remove duplicates
+    const uniqueExternal = external.filter(food => {
+      if (food.barcode && internalByBarcode.has(food.barcode)) {
+        return false; // Skip if already in internal
+      }
+      return true;
+    });
+
+    // Prioritize: External (OpenFoodFacts) first, then internal favorites, then other internal
+    const internalFavorites = internal.filter(f => f.is_favorite);
+    const internalOthers = internal.filter(f => !f.is_favorite);
+
+    return [
+      ...uniqueExternal,
+      ...internalFavorites,
+      ...internalOthers,
+    ];
+  };
 
   const handleBarcodeScan = () => {
     console.log('Opening barcode scanner...');
@@ -53,21 +136,61 @@ export default function AddFoodScreen() {
   const handleCopyMeal = (date: string, meal: string) => {
     console.log(`Copying meal from ${date} - ${meal}`);
     setShowCopyModal(false);
-    // In a real app, this would copy the meal items
     alert(`Copied ${meal} from ${date} to current ${mealType}`);
   };
 
-  const handleSelectFood = (foodId: string) => {
-    console.log('Select food', foodId);
-    router.push({
-      pathname: '/food-detail',
-      params: {
-        foodId: foodId,
-        mealType: mealType,
-        date: date
+  const handleSelectFood = async (food: any) => {
+    console.log('Select food', food.name);
+
+    try {
+      // If food is from OpenFoodFacts (no id), cache it first
+      if (food.is_from_openfoodfacts && !food.id) {
+        console.log('[AddFood] Caching OpenFoodFacts product:', food.name);
+        const cachedFood = await upsertFood(food);
+        
+        router.push({
+          pathname: '/food-detail',
+          params: {
+            foodId: cachedFood.id,
+            mealType: mealType,
+            date: date,
+            fromOpenFoodFacts: 'true'
+          }
+        });
+      } else {
+        router.push({
+          pathname: '/food-detail',
+          params: {
+            foodId: food.id,
+            mealType: mealType,
+            date: date
+          }
+        });
       }
-    });
+    } catch (error) {
+      console.error('[AddFood] Error selecting food:', error);
+      alert('Failed to select food. Please try again.');
+    }
   };
+
+  const getDisplayFoods = () => {
+    if (searchQuery.length > 0) {
+      return searchResults;
+    }
+
+    switch (activeTab) {
+      case 'recent':
+        return recentFoods;
+      case 'favorites':
+        return favoriteFoods;
+      case 'all':
+        return [...recentFoods, ...favoriteFoods];
+      default:
+        return recentFoods;
+    }
+  };
+
+  const displayFoods = getDisplayFoods();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -101,6 +224,9 @@ export default function AddFoodScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+          {isSearching && (
+            <ActivityIndicator size="small" color={colors.primary} />
+          )}
         </View>
       </View>
 
@@ -132,26 +258,28 @@ export default function AddFoodScreen() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabs}>
-        <TabButton
-          label="Recent"
-          active={activeTab === 'recent'}
-          onPress={() => setActiveTab('recent')}
-          isDark={isDark}
-        />
-        <TabButton
-          label="Favorites"
-          active={activeTab === 'favorites'}
-          onPress={() => setActiveTab('favorites')}
-          isDark={isDark}
-        />
-        <TabButton
-          label="All Foods"
-          active={activeTab === 'all'}
-          onPress={() => setActiveTab('all')}
-          isDark={isDark}
-        />
-      </View>
+      {searchQuery.length === 0 && (
+        <View style={styles.tabs}>
+          <TabButton
+            label="Recent"
+            active={activeTab === 'recent'}
+            onPress={() => setActiveTab('recent')}
+            isDark={isDark}
+          />
+          <TabButton
+            label="Favorites"
+            active={activeTab === 'favorites'}
+            onPress={() => setActiveTab('favorites')}
+            isDark={isDark}
+          />
+          <TabButton
+            label="All Foods"
+            active={activeTab === 'all'}
+            onPress={() => setActiveTab('all')}
+            isDark={isDark}
+          />
+        </View>
+      )}
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
@@ -161,19 +289,26 @@ export default function AddFoodScreen() {
           <React.Fragment key={index}>
           <TouchableOpacity
             style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            onPress={() => handleSelectFood(food.id)}
+            onPress={() => handleSelectFood(food)}
           >
             <View style={styles.foodInfo}>
-              <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                {food.name}
-              </Text>
+              <View style={styles.foodNameRow}>
+                <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                  {food.name}
+                </Text>
+                {food.is_from_openfoodfacts && (
+                  <View style={[styles.badge, { backgroundColor: colors.secondary + '20' }]}>
+                    <Text style={[styles.badgeText, { color: colors.secondary }]}>OFF</Text>
+                  </View>
+                )}
+              </View>
               {food.brand && (
                 <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                   {food.brand}
                 </Text>
               )}
               <Text style={[styles.foodServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {food.serving_amount}{food.serving_unit} • {food.calories} kcal
+                {food.serving_amount}{food.serving_unit} • {Math.round(food.calories)} kcal
               </Text>
             </View>
             
@@ -186,11 +321,11 @@ export default function AddFoodScreen() {
           </React.Fragment>
         ))}
 
-        {displayFoods.length === 0 && (
+        {displayFoods.length === 0 && !isSearching && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🔍</Text>
             <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              No foods found
+              {searchQuery.length > 0 ? 'No foods found' : 'No foods available'}
             </Text>
             <TouchableOpacity
               style={[styles.createButton, { backgroundColor: colors.primary }]}
@@ -394,9 +529,24 @@ const styles = StyleSheet.create({
   foodInfo: {
     marginBottom: spacing.sm,
   },
+  foodNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: 2,
+  },
   foodName: {
     ...typography.bodyBold,
-    marginBottom: 2,
+    flex: 1,
+  },
+  badge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.xs,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   foodBrand: {
     ...typography.caption,

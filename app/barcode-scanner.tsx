@@ -7,7 +7,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { mockFoods } from '@/data/mockData';
+import { findFoodByBarcode, upsertFood } from '@/utils/foodDatabase';
+import { fetchProductByBarcode, mapOpenFoodFactsToFood } from '@/utils/openFoodFacts';
 
 export default function BarcodeScannerScreen() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function BarcodeScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('Searching database...');
 
   useEffect(() => {
     if (permission && !permission.granted && !permission.canAskAgain) {
@@ -84,7 +86,7 @@ export default function BarcodeScannerScreen() {
     );
   }
 
-  const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+  const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
     if (scanned || isProcessing) {
       console.log('Already processing a scan, ignoring');
       return;
@@ -94,37 +96,83 @@ export default function BarcodeScannerScreen() {
     setIsProcessing(true);
     console.log(`Barcode scanned: Type: ${type}, Data: ${data}`);
 
-    // Immediately search for food by barcode in mock data
-    const foundFood = mockFoods.find(food => food.barcode === data);
+    try {
+      // Step 1: Check internal database
+      setStatusMessage('Checking internal database...');
+      const internalFood = await findFoodByBarcode(data);
 
-    // Small delay to show processing state (mimics database lookup)
-    setTimeout(() => {
-      if (foundFood) {
-        console.log('Food found in database:', foundFood.name);
+      if (internalFood) {
+        console.log('Food found in internal database:', internalFood.name);
         // Navigate directly to food detail screen
         router.replace({
           pathname: '/food-detail',
           params: {
-            foodId: foundFood.id,
+            foodId: internalFood.id,
             mealType: mealType,
             date: date,
             fromBarcode: 'true'
           }
         });
-      } else {
-        console.log('Food not found, opening create food screen');
-        // Navigate directly to create food screen with barcode pre-filled
-        router.replace({
-          pathname: '/create-food',
-          params: {
-            barcode: data,
-            mealType: mealType,
-            date: date,
-            fromBarcode: 'true'
-          }
-        });
+        return;
       }
-    }, 300); // Minimal delay for smooth UX
+
+      // Step 2: Check OpenFoodFacts (external database)
+      setStatusMessage('Searching OpenFoodFacts...');
+      const externalProduct = await fetchProductByBarcode(data);
+
+      if (externalProduct) {
+        console.log('Product found in OpenFoodFacts:', externalProduct.product_name);
+        
+        // Map to internal format
+        const mappedFood = mapOpenFoodFactsToFood(externalProduct);
+        
+        // Cache in internal database
+        setStatusMessage('Caching product...');
+        const cachedFood = await upsertFood(mappedFood);
+        
+        console.log('Product cached successfully:', cachedFood.id);
+        
+        // Navigate to food detail screen
+        router.replace({
+          pathname: '/food-detail',
+          params: {
+            foodId: cachedFood.id,
+            mealType: mealType,
+            date: date,
+            fromBarcode: 'true',
+            fromOpenFoodFacts: 'true'
+          }
+        });
+        return;
+      }
+
+      // Step 3: Neither found - open create food screen
+      console.log('Food not found in any database, opening create food screen');
+      router.replace({
+        pathname: '/create-food',
+        params: {
+          barcode: data,
+          mealType: mealType,
+          date: date,
+          fromBarcode: 'true'
+        }
+      });
+    } catch (error) {
+      console.error('Error processing barcode scan:', error);
+      Alert.alert(
+        'Error',
+        'Failed to process barcode. Please try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              setScanned(false);
+              setIsProcessing(false);
+            }
+          }
+        ]
+      );
+    }
   };
 
   return (
@@ -181,7 +229,7 @@ export default function BarcodeScannerScreen() {
       {isProcessing && (
         <View style={styles.processingOverlay}>
           <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.processingText}>Searching database...</Text>
+          <Text style={styles.processingText}>{statusMessage}</Text>
         </View>
       )}
     </SafeAreaView>

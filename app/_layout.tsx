@@ -16,6 +16,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
+import { initializeFoodDatabase } from "@/utils/foodDatabase";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,6 +34,10 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      // Initialize food database
+      initializeFoodDatabase().catch(error => {
+        console.error('Failed to initialize food database:', error);
+      });
     }
   }, [loaded]);
 

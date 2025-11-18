@@ -1,12 +1,12 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { mockFoods, mockMeals, mockMealItems } from '@/data/mockData';
+import { getFoodById } from '@/utils/foodDatabase';
 import { Food } from '@/types';
 
 export default function FoodDetailScreen() {
@@ -16,12 +16,40 @@ export default function FoodDetailScreen() {
   const mealType = params.mealType as string || 'breakfast';
   const date = params.date as string || new Date().toISOString().split('T')[0];
   const fromBarcode = params.fromBarcode === 'true';
+  const fromOpenFoodFacts = params.fromOpenFoodFacts === 'true';
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const food = mockFoods.find(f => f.id === foodId);
-  
+  const [food, setFood] = useState<Food | null>(null);
   const [servings, setServings] = useState('1');
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    loadFood();
+  }, [foodId]);
+
+  const loadFood = async () => {
+    try {
+      const loadedFood = await getFoodById(foodId);
+      setFood(loadedFood);
+    } catch (error) {
+      console.error('Error loading food:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            Loading...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!food) {
     return (
@@ -94,8 +122,8 @@ export default function FoodDetailScreen() {
     alert(`Added ${food.name} to ${mealType}!`);
 
     // Navigate back to diary
-    if (fromBarcode) {
-      // If from barcode, go back to diary (skip scanner screen)
+    if (fromBarcode || fromOpenFoodFacts) {
+      // If from barcode or OpenFoodFacts, go back to diary (skip scanner/search screen)
       router.replace('/(tabs)/diary');
     } else {
       router.back();
@@ -133,6 +161,20 @@ export default function FoodDetailScreen() {
             />
             <Text style={[styles.barcodeTagText, { color: colors.primary }]}>
               Scanned from barcode
+            </Text>
+          </View>
+        )}
+
+        {fromOpenFoodFacts && (
+          <View style={[styles.barcodeTag, { backgroundColor: colors.secondary + '20' }]}>
+            <IconSymbol
+              ios_icon_name="globe"
+              android_material_icon_name="public"
+              size={20}
+              color={colors.secondary}
+            />
+            <Text style={[styles.barcodeTagText, { color: colors.secondary }]}>
+              From OpenFoodFacts database
             </Text>
           </View>
         )}
@@ -303,6 +345,14 @@ const styles = StyleSheet.create({
     ...typography.h3,
     flex: 1,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.body,
   },
   errorContainer: {
     flex: 1,

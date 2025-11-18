@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { mockFoods } from '@/data/mockData';
+import { upsertFood } from '@/utils/foodDatabase';
 
 export default function CreateFoodScreen() {
   const router = useRouter();
@@ -27,54 +27,60 @@ export default function CreateFoodScreen() {
   const [carbs, setCarbs] = useState('');
   const [fats, setFats] = useState('');
   const [fiber, setFiber] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate required fields
     if (!foodName || !servingAmount || !calories || !protein || !carbs || !fats) {
       alert('Please fill in all required fields (marked with *)');
       return;
     }
 
-    const newFood = {
-      id: `food-${Date.now()}`,
-      name: foodName,
-      brand: brand || undefined,
-      serving_amount: parseFloat(servingAmount),
-      serving_unit: servingUnit,
-      calories: parseFloat(calories),
-      protein: parseFloat(protein),
-      carbs: parseFloat(carbs),
-      fats: parseFloat(fats),
-      fiber: parseFloat(fiber) || 0,
-      barcode: barcode || undefined,
-      user_created: true,
-      is_favorite: false,
-    };
+    setIsSaving(true);
 
-    console.log('Saving new food:', newFood);
-    
-    // In a real app, this would:
-    // 1. Save the food to the database
-    // 2. Navigate to food detail screen to add to meal
-    
-    // Simulate saving
-    mockFoods.push(newFood);
+    try {
+      const newFood = {
+        name: foodName,
+        brand: brand || undefined,
+        serving_amount: parseFloat(servingAmount),
+        serving_unit: servingUnit,
+        calories: parseFloat(calories),
+        protein: parseFloat(protein),
+        carbs: parseFloat(carbs),
+        fats: parseFloat(fats),
+        fiber: parseFloat(fiber) || 0,
+        barcode: barcode || undefined,
+        user_created: true,
+        is_favorite: false,
+      };
 
-    alert('Food created successfully!');
+      console.log('Saving new food:', newFood);
+      
+      // Save to internal database
+      const savedFood = await upsertFood(newFood);
+      console.log('Food saved successfully:', savedFood.id);
 
-    // If from barcode scan, navigate to food detail to add to meal
-    if (fromBarcode) {
-      router.replace({
-        pathname: '/food-detail',
-        params: {
-          foodId: newFood.id,
-          mealType: mealType,
-          date: date,
-          fromBarcode: 'true'
-        }
-      });
-    } else {
-      router.back();
+      alert('Food created successfully!');
+
+      // If from barcode scan, navigate to food detail to add to meal
+      if (fromBarcode) {
+        router.replace({
+          pathname: '/food-detail',
+          params: {
+            foodId: savedFood.id,
+            mealType: mealType,
+            date: date,
+            fromBarcode: 'true'
+          }
+        });
+      } else {
+        router.back();
+      }
+    } catch (error) {
+      console.error('Error saving food:', error);
+      alert('Failed to save food. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -99,8 +105,10 @@ export default function CreateFoodScreen() {
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
           Create Food
         </Text>
-        <TouchableOpacity onPress={handleSave}>
-          <Text style={[styles.saveButton, { color: colors.primary }]}>Save</Text>
+        <TouchableOpacity onPress={handleSave} disabled={isSaving}>
+          <Text style={[styles.saveButton, { color: isSaving ? colors.textSecondary : colors.primary }]}>
+            {isSaving ? 'Saving...' : 'Save'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -319,11 +327,12 @@ export default function CreateFoodScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.saveButtonLarge, { backgroundColor: colors.primary }]}
+          style={[styles.saveButtonLarge, { backgroundColor: isSaving ? colors.textSecondary : colors.primary }]}
           onPress={handleSave}
+          disabled={isSaving}
         >
           <Text style={styles.saveButtonLargeText}>
-            {fromBarcode ? 'Create & Add to Meal' : 'Create Food'}
+            {isSaving ? 'Saving...' : (fromBarcode ? 'Create & Add to Meal' : 'Create Food')}
           </Text>
         </TouchableOpacity>
       </ScrollView>
