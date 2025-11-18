@@ -21,7 +21,8 @@ export default function BarcodeScannerScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Searching database...');
+  const [statusMessage, setStatusMessage] = useState('');
+  const [lastScannedCode, setLastScannedCode] = useState<string>('');
   const processingRef = useRef(false);
 
   useEffect(() => {
@@ -96,11 +97,15 @@ export default function BarcodeScannerScreen() {
       return;
     }
     
+    console.log(`[Scanner] ✓✓✓ BARCODE DETECTED! Type: ${type}, Data: ${data}`);
+    
+    // IMMEDIATELY update the debug label to prove detection is working
+    setLastScannedCode(data);
+    
     processingRef.current = true;
     setScanned(true);
     setIsProcessing(true);
-    
-    console.log(`[Scanner] Barcode detected - Type: ${type}, Data: ${data}`);
+    setStatusMessage('Barcode detected!');
 
     // Haptic feedback to indicate successful scan
     try {
@@ -108,6 +113,9 @@ export default function BarcodeScannerScreen() {
     } catch (error) {
       console.log('[Scanner] Haptic feedback not available');
     }
+
+    // Small delay to let user see the debug label update
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     try {
       // Step 1: Check internal database
@@ -194,6 +202,7 @@ export default function BarcodeScannerScreen() {
               processingRef.current = false;
               setScanned(false);
               setIsProcessing(false);
+              setLastScannedCode('');
             }
           },
           {
@@ -224,6 +233,16 @@ export default function BarcodeScannerScreen() {
           Scan Barcode
         </Text>
         <View style={{ width: 24 }} />
+      </View>
+
+      {/* DEBUG LABEL - PROVES SCANNER IS WORKING */}
+      <View style={styles.debugContainer}>
+        <Text style={styles.debugLabel}>
+          Last scanned code:
+        </Text>
+        <Text style={styles.debugValue}>
+          {lastScannedCode || '(waiting for scan...)'}
+        </Text>
       </View>
 
       <View style={styles.cameraContainer}>
@@ -310,6 +329,37 @@ const styles = StyleSheet.create({
     ...typography.h3,
     flex: 1,
     textAlign: 'center',
+  },
+  debugContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'android' ? 80 : 60,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    backgroundColor: '#FFD700',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginHorizontal: spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  debugLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  debugValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000000',
+    textAlign: 'center',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   loadingContainer: {
     flex: 1,
