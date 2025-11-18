@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -21,6 +22,7 @@ export default function BarcodeScannerScreen() {
   const [scanned, setScanned] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Searching database...');
+  const processingRef = useRef(false);
 
   useEffect(() => {
     if (permission && !permission.granted && !permission.canAskAgain) {
@@ -36,6 +38,7 @@ export default function BarcodeScannerScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={isDark ? colors.textDark : colors.text} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
             Loading camera...
           </Text>
@@ -87,22 +90,33 @@ export default function BarcodeScannerScreen() {
   }
 
   const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
-    if (scanned || isProcessing) {
-      console.log('Already processing a scan, ignoring');
+    // Prevent multiple simultaneous scans
+    if (processingRef.current) {
+      console.log('[Scanner] Already processing a scan, ignoring');
       return;
     }
     
+    processingRef.current = true;
     setScanned(true);
     setIsProcessing(true);
-    console.log(`Barcode scanned: Type: ${type}, Data: ${data}`);
+    
+    console.log(`[Scanner] Barcode detected - Type: ${type}, Data: ${data}`);
+
+    // Haptic feedback to indicate successful scan
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      console.log('[Scanner] Haptic feedback not available');
+    }
 
     try {
       // Step 1: Check internal database
+      console.log('[Scanner] Step 1: Checking internal database...');
       setStatusMessage('Checking internal database...');
       const internalFood = await findFoodByBarcode(data);
 
       if (internalFood) {
-        console.log('Food found in internal database:', internalFood.name);
+        console.log('[Scanner] ✓ Food found in internal database:', internalFood.name);
         // Navigate directly to food detail screen
         router.replace({
           pathname: '/food-detail',
@@ -116,21 +130,25 @@ export default function BarcodeScannerScreen() {
         return;
       }
 
+      console.log('[Scanner] ✗ Not found in internal database');
+
       // Step 2: Check OpenFoodFacts (external database)
+      console.log('[Scanner] Step 2: Checking OpenFoodFacts API...');
       setStatusMessage('Searching OpenFoodFacts...');
       const externalProduct = await fetchProductByBarcode(data);
 
       if (externalProduct) {
-        console.log('Product found in OpenFoodFacts:', externalProduct.product_name);
+        console.log('[Scanner] ✓ Product found in OpenFoodFacts:', externalProduct.product_name);
         
         // Map to internal format
         const mappedFood = mapOpenFoodFactsToFood(externalProduct);
         
         // Cache in internal database
+        console.log('[Scanner] Caching product in internal database...');
         setStatusMessage('Caching product...');
         const cachedFood = await upsertFood(mappedFood);
         
-        console.log('Product cached successfully:', cachedFood.id);
+        console.log('[Scanner] ✓ Product cached successfully:', cachedFood.id);
         
         // Navigate to food detail screen
         router.replace({
@@ -146,8 +164,10 @@ export default function BarcodeScannerScreen() {
         return;
       }
 
+      console.log('[Scanner] ✗ Not found in OpenFoodFacts');
+
       // Step 3: Neither found - open create food screen
-      console.log('Food not found in any database, opening create food screen');
+      console.log('[Scanner] Step 3: Opening create food screen with barcode pre-filled');
       router.replace({
         pathname: '/create-food',
         params: {
@@ -158,17 +178,28 @@ export default function BarcodeScannerScreen() {
         }
       });
     } catch (error) {
-      console.error('Error processing barcode scan:', error);
+      console.error('[Scanner] Error processing barcode scan:', error);
+      processingRef.current = false;
+      setScanned(false);
+      setIsProcessing(false);
+      
       Alert.alert(
         'Error',
         'Failed to process barcode. Please try again.',
         [
           {
-            text: 'OK',
+            text: 'Retry',
             onPress: () => {
+              // Reset state to allow retry
+              processingRef.current = false;
               setScanned(false);
               setIsProcessing(false);
             }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => router.back()
           }
         ]
       );
@@ -176,9 +207,12 @@ export default function BarcodeScannerScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: '#000000' }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity 
+          onPress={() => router.back()}
+          disabled={isProcessing}
+        >
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -196,7 +230,6 @@ export default function BarcodeScannerScreen() {
         <CameraView
           style={styles.camera}
           facing="back"
-          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
           barcodeScannerSettings={{
             barcodeTypes: [
               'ean13',
@@ -205,9 +238,15 @@ export default function BarcodeScannerScreen() {
               'upc_e',
               'code128',
               'code39',
+              'code93',
+              'codabar',
+              'itf14',
               'qr',
+              'pdf417',
+              'aztec',
             ],
           }}
+          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
         />
         
         <View style={styles.overlay}>
@@ -216,6 +255,17 @@ export default function BarcodeScannerScreen() {
             <View style={[styles.corner, styles.topRight]} />
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
+            
+            {scanned && (
+              <View style={styles.scanSuccessIndicator}>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check_circle"
+                  size={48}
+                  color="#4CAF50"
+                />
+              </View>
+            )}
           </View>
           
           {!isProcessing && (
@@ -228,8 +278,10 @@ export default function BarcodeScannerScreen() {
 
       {isProcessing && (
         <View style={styles.processingOverlay}>
-          <ActivityIndicator size="large" color="#FFFFFF" />
-          <Text style={styles.processingText}>{statusMessage}</Text>
+          <View style={styles.processingContent}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.processingText}>{statusMessage}</Text>
+          </View>
         </View>
       )}
     </SafeAreaView>
@@ -252,7 +304,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   title: {
     ...typography.h3,
@@ -266,6 +318,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     ...typography.body,
+    marginTop: spacing.md,
   },
   permissionContainer: {
     flex: 1,
@@ -306,61 +359,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scanArea: {
-    width: 250,
-    height: 250,
+    width: 280,
+    height: 280,
     position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   corner: {
     position: 'absolute',
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     borderColor: '#FFFFFF',
+    borderWidth: 0,
   },
   topLeft: {
     top: 0,
     left: 0,
-    borderTopWidth: 4,
-    borderLeftWidth: 4,
+    borderTopWidth: 5,
+    borderLeftWidth: 5,
   },
   topRight: {
     top: 0,
     right: 0,
-    borderTopWidth: 4,
-    borderRightWidth: 4,
+    borderTopWidth: 5,
+    borderRightWidth: 5,
   },
   bottomLeft: {
     bottom: 0,
     left: 0,
-    borderBottomWidth: 4,
-    borderLeftWidth: 4,
+    borderBottomWidth: 5,
+    borderLeftWidth: 5,
   },
   bottomRight: {
     bottom: 0,
     right: 0,
-    borderBottomWidth: 4,
-    borderRightWidth: 4,
+    borderBottomWidth: 5,
+    borderRightWidth: 5,
+  },
+  scanSuccessIndicator: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   instructionText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
-    marginTop: spacing.xl,
+    marginTop: spacing.xl * 2,
     textAlign: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: borderRadius.md,
   },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingContent: {
     alignItems: 'center',
   },
   processingText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
 });
