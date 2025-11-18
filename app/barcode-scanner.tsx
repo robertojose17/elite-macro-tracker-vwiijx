@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -11,10 +11,14 @@ import { mockFoods } from '@/data/mockData';
 
 export default function BarcodeScannerScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const mealType = params.mealType as string || 'breakfast';
+  const date = params.date as string || new Date().toISOString().split('T')[0];
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     if (permission && !permission.granted && !permission.canAskAgain) {
@@ -81,62 +85,46 @@ export default function BarcodeScannerScreen() {
   }
 
   const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
-    if (scanned) {
-      console.log('Already scanned, ignoring');
+    if (scanned || isProcessing) {
+      console.log('Already processing a scan, ignoring');
       return;
     }
     
     setScanned(true);
+    setIsProcessing(true);
     console.log(`Barcode scanned: Type: ${type}, Data: ${data}`);
 
-    // Search for food by barcode in mock data
+    // Immediately search for food by barcode in mock data
     const foundFood = mockFoods.find(food => food.barcode === data);
 
-    if (foundFood) {
-      Alert.alert(
-        'Food Found!',
-        `${foundFood.name} - ${foundFood.calories} kcal`,
-        [
-          {
-            text: 'Add to Meal',
-            onPress: () => {
-              console.log('Adding food to meal:', foundFood.name);
-              router.back();
-            },
-          },
-          {
-            text: 'Scan Another',
-            onPress: () => setScanned(false),
-          },
-        ]
-      );
-    } else {
-      Alert.alert(
-        'Food Not Found',
-        `Barcode ${data} not found in database. Would you like to create a new food item?`,
-        [
-          {
-            text: 'Create Food',
-            onPress: () => {
-              console.log('Creating new food with barcode:', data);
-              router.push({
-                pathname: '/create-food',
-                params: { barcode: data }
-              });
-            },
-          },
-          {
-            text: 'Scan Another',
-            onPress: () => setScanned(false),
-          },
-          {
-            text: 'Cancel',
-            onPress: () => router.back(),
-            style: 'cancel',
-          },
-        ]
-      );
-    }
+    // Small delay to show processing state (mimics database lookup)
+    setTimeout(() => {
+      if (foundFood) {
+        console.log('Food found in database:', foundFood.name);
+        // Navigate directly to food detail screen
+        router.replace({
+          pathname: '/food-detail',
+          params: {
+            foodId: foundFood.id,
+            mealType: mealType,
+            date: date,
+            fromBarcode: 'true'
+          }
+        });
+      } else {
+        console.log('Food not found, opening create food screen');
+        // Navigate directly to create food screen with barcode pre-filled
+        router.replace({
+          pathname: '/create-food',
+          params: {
+            barcode: data,
+            mealType: mealType,
+            date: date,
+            fromBarcode: 'true'
+          }
+        });
+      }
+    }, 300); // Minimal delay for smooth UX
   };
 
   return (
@@ -182,15 +170,18 @@ export default function BarcodeScannerScreen() {
             <View style={[styles.corner, styles.bottomRight]} />
           </View>
           
-          <Text style={styles.instructionText}>
-            Position barcode within the frame
-          </Text>
+          {!isProcessing && (
+            <Text style={styles.instructionText}>
+              Position barcode within the frame
+            </Text>
+          )}
         </View>
       </View>
 
-      {scanned && (
-        <View style={styles.scannedOverlay}>
-          <Text style={styles.scannedText}>Processing barcode...</Text>
+      {isProcessing && (
+        <View style={styles.processingOverlay}>
+          <ActivityIndicator size="large" color="#FFFFFF" />
+          <Text style={styles.processingText}>Searching database...</Text>
         </View>
       )}
     </SafeAreaView>
@@ -312,15 +303,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
   },
-  scannedOverlay: {
+  processingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  scannedText: {
+  processingText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    marginTop: spacing.md,
   },
 });

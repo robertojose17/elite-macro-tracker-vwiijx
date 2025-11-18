@@ -6,11 +6,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
+import { mockFoods } from '@/data/mockData';
 
 export default function CreateFoodScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const barcode = params.barcode as string || '';
+  const mealType = params.mealType as string || 'breakfast';
+  const date = params.date as string || new Date().toISOString().split('T')[0];
+  const fromBarcode = params.fromBarcode === 'true';
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -25,28 +29,66 @@ export default function CreateFoodScreen() {
   const [fiber, setFiber] = useState('');
 
   const handleSave = () => {
-    console.log('Saving new food:', {
-      foodName,
-      brand,
-      servingAmount,
-      servingUnit,
-      calories,
-      protein,
-      carbs,
-      fats,
-      fiber,
-      barcode,
-    });
+    // Validate required fields
+    if (!foodName || !servingAmount || !calories || !protein || !carbs || !fats) {
+      alert('Please fill in all required fields (marked with *)');
+      return;
+    }
+
+    const newFood = {
+      id: `food-${Date.now()}`,
+      name: foodName,
+      brand: brand || undefined,
+      serving_amount: parseFloat(servingAmount),
+      serving_unit: servingUnit,
+      calories: parseFloat(calories),
+      protein: parseFloat(protein),
+      carbs: parseFloat(carbs),
+      fats: parseFloat(fats),
+      fiber: parseFloat(fiber) || 0,
+      barcode: barcode || undefined,
+      user_created: true,
+      is_favorite: false,
+    };
+
+    console.log('Saving new food:', newFood);
     
-    // In a real app, this would save to the database
+    // In a real app, this would:
+    // 1. Save the food to the database
+    // 2. Navigate to food detail screen to add to meal
+    
+    // Simulate saving
+    mockFoods.push(newFood);
+
     alert('Food created successfully!');
-    router.back();
+
+    // If from barcode scan, navigate to food detail to add to meal
+    if (fromBarcode) {
+      router.replace({
+        pathname: '/food-detail',
+        params: {
+          foodId: newFood.id,
+          mealType: mealType,
+          date: date,
+          fromBarcode: 'true'
+        }
+      });
+    } else {
+      router.back();
+    }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => {
+          if (fromBarcode) {
+            // If from barcode, go back to diary
+            router.replace('/(tabs)/diary');
+          } else {
+            router.back();
+          }
+        }}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -74,8 +116,27 @@ export default function CreateFoodScreen() {
               size={24}
               color={colors.primary}
             />
-            <Text style={[styles.barcodeText, { color: isDark ? colors.textDark : colors.text }]}>
-              Barcode: {barcode}
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.barcodeLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Scanned Barcode
+              </Text>
+              <Text style={[styles.barcodeText, { color: isDark ? colors.textDark : colors.text }]}>
+                {barcode}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {fromBarcode && (
+          <View style={[styles.infoCard, { backgroundColor: colors.primary + '15' }]}>
+            <IconSymbol
+              ios_icon_name="info.circle"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={[styles.infoText, { color: colors.primary }]}>
+              This barcode wasn&apos;t found in our database. Please enter the nutrition information below.
             </Text>
           </View>
         )}
@@ -261,7 +322,9 @@ export default function CreateFoodScreen() {
           style={[styles.saveButtonLarge, { backgroundColor: colors.primary }]}
           onPress={handleSave}
         >
-          <Text style={styles.saveButtonLargeText}>Create Food</Text>
+          <Text style={styles.saveButtonLargeText}>
+            {fromBarcode ? 'Create & Add to Meal' : 'Create Food'}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -295,14 +358,31 @@ const styles = StyleSheet.create({
   barcodeCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+  },
+  barcodeLabel: {
+    ...typography.caption,
+    marginBottom: 2,
+  },
+  barcodeText: {
+    ...typography.body,
+    fontWeight: '600',
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     marginBottom: spacing.md,
   },
-  barcodeText: {
-    ...typography.body,
-    fontWeight: '600',
+  infoText: {
+    ...typography.caption,
+    flex: 1,
+    lineHeight: 18,
   },
   section: {
     borderRadius: borderRadius.lg,

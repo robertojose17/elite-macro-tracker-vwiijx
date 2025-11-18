@@ -12,6 +12,7 @@ export default function AddFoodScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const mealType = params.mealType as string || 'breakfast';
+  const date = params.date as string || new Date().toISOString().split('T')[0];
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
@@ -31,7 +32,13 @@ export default function AddFoodScreen() {
 
   const handleBarcodeScan = () => {
     console.log('Opening barcode scanner...');
-    router.push('/barcode-scanner');
+    router.push({
+      pathname: '/barcode-scanner',
+      params: {
+        mealType: mealType,
+        date: date
+      }
+    });
   };
 
   const handleCopyFromPreviousDays = () => {
@@ -48,6 +55,18 @@ export default function AddFoodScreen() {
     setShowCopyModal(false);
     // In a real app, this would copy the meal items
     alert(`Copied ${meal} from ${date} to current ${mealType}`);
+  };
+
+  const handleSelectFood = (foodId: string) => {
+    console.log('Select food', foodId);
+    router.push({
+      pathname: '/food-detail',
+      params: {
+        foodId: foodId,
+        mealType: mealType,
+        date: date
+      }
+    });
   };
 
   return (
@@ -142,7 +161,7 @@ export default function AddFoodScreen() {
           <React.Fragment key={index}>
           <TouchableOpacity
             style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-            onPress={() => console.log('Select food', food.name)}
+            onPress={() => handleSelectFood(food.id)}
           >
             <View style={styles.foodInfo}>
               <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
@@ -175,7 +194,13 @@ export default function AddFoodScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.createButton, { backgroundColor: colors.primary }]}
-              onPress={() => console.log('Create food')}
+              onPress={() => router.push({
+                pathname: '/create-food',
+                params: {
+                  mealType: mealType,
+                  date: date
+                }
+              })}
             >
               <Text style={styles.createButtonText}>Create Custom Food</Text>
             </TouchableOpacity>
