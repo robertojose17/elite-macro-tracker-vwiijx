@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -10,11 +10,14 @@ import { mockFoods } from '@/data/mockData';
 
 export default function AddFoodScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const mealType = params.mealType as string || 'breakfast';
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'recent' | 'favorites' | 'all'>('recent');
+  const [showCopyModal, setShowCopyModal] = useState(false);
 
   const filteredFoods = mockFoods.filter(food =>
     food.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -26,19 +29,40 @@ export default function AddFoodScreen() {
 
   const displayFoods = activeTab === 'recent' ? recentFoods : activeTab === 'favorites' ? favoriteFoods : filteredFoods;
 
+  const handleBarcodeScan = () => {
+    console.log('Opening barcode scanner...');
+    router.push('/barcode-scanner');
+  };
+
+  const handleCopyFromPreviousDays = () => {
+    console.log('Opening copy from previous days...');
+    setShowCopyModal(true);
+  };
+
+  const handleCloseCopyModal = () => {
+    setShowCopyModal(false);
+  };
+
+  const handleCopyMeal = (date: string, meal: string) => {
+    console.log(`Copying meal from ${date} - ${meal}`);
+    setShowCopyModal(false);
+    // In a real app, this would copy the meal items
+    alert(`Copied ${meal} from ${date} to current ${mealType}`);
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <IconSymbol
-            ios_icon_name="arrow_back"
+            ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
             size={24}
             color={isDark ? colors.textDark : colors.text}
           />
         </TouchableOpacity>
         <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          Add Food
+          Add Food to {mealType.charAt(0).toUpperCase() + mealType.slice(1)}
         </Text>
         <View style={{ width: 24 }} />
       </View>
@@ -46,7 +70,7 @@ export default function AddFoodScreen() {
       <View style={styles.searchContainer}>
         <View style={[styles.searchBar, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}>
           <IconSymbol
-            ios_icon_name="search"
+            ios_icon_name="magnifyingglass"
             android_material_icon_name="search"
             size={20}
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
@@ -59,17 +83,33 @@ export default function AddFoodScreen() {
             onChangeText={setSearchQuery}
           />
         </View>
+      </View>
 
+      <View style={styles.actionButtons}>
         <TouchableOpacity
-          style={[styles.scanButton, { backgroundColor: colors.primary }]}
-          onPress={() => console.log('Scan barcode')}
+          style={[styles.actionButton, { backgroundColor: colors.primary }]}
+          onPress={handleBarcodeScan}
         >
           <IconSymbol
-            ios_icon_name="qr_code_scanner"
+            ios_icon_name="barcode.viewfinder"
             android_material_icon_name="qr_code_scanner"
-            size={24}
+            size={20}
             color="#FFFFFF"
           />
+          <Text style={styles.actionButtonText}>Barcode Scan</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, { backgroundColor: colors.secondary }]}
+          onPress={handleCopyFromPreviousDays}
+        >
+          <IconSymbol
+            ios_icon_name="doc.on.doc"
+            android_material_icon_name="content_copy"
+            size={20}
+            color="#FFFFFF"
+          />
+          <Text style={styles.actionButtonText}>Copy from Previous</Text>
         </TouchableOpacity>
       </View>
 
@@ -101,7 +141,6 @@ export default function AddFoodScreen() {
         {displayFoods.map((food, index) => (
           <React.Fragment key={index}>
           <TouchableOpacity
-            key={food.id}
             style={[styles.foodCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
             onPress={() => console.log('Select food', food.name)}
           >
@@ -143,6 +182,13 @@ export default function AddFoodScreen() {
           </View>
         )}
       </ScrollView>
+
+      <CopyFromPreviousModal
+        visible={showCopyModal}
+        onClose={handleCloseCopyModal}
+        onCopyMeal={handleCopyMeal}
+        isDark={isDark}
+      />
     </SafeAreaView>
   );
 }
@@ -177,6 +223,71 @@ function MacroPill({ label, value, color }: any) {
   );
 }
 
+function CopyFromPreviousModal({ visible, onClose, onCopyMeal, isDark }: any) {
+  const previousDays = [
+    { date: 'Yesterday', meals: ['Breakfast', 'Lunch', 'Dinner', 'Snacks'] },
+    { date: '2 days ago', meals: ['Breakfast', 'Lunch', 'Dinner'] },
+    { date: '3 days ago', meals: ['Breakfast', 'Lunch', 'Dinner', 'Snacks'] },
+  ];
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Copy from Previous Days
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <IconSymbol
+                ios_icon_name="xmark"
+                android_material_icon_name="close"
+                size={24}
+                color={isDark ? colors.textDark : colors.text}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalScroll}>
+            {previousDays.map((day, dayIndex) => (
+              <React.Fragment key={dayIndex}>
+              <View style={styles.daySection}>
+                <Text style={[styles.dayTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  {day.date}
+                </Text>
+                {day.meals.map((meal, mealIndex) => (
+                  <React.Fragment key={mealIndex}>
+                  <TouchableOpacity
+                    style={[styles.mealOption, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                    onPress={() => onCopyMeal(day.date, meal)}
+                  >
+                    <Text style={[styles.mealOptionText, { color: isDark ? colors.textDark : colors.text }]}>
+                      {meal}
+                    </Text>
+                    <IconSymbol
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron_right"
+                      size={20}
+                      color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </View>
+              </React.Fragment>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -190,16 +301,15 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   title: {
-    ...typography.h2,
+    ...typography.h3,
+    flex: 1,
+    textAlign: 'center',
   },
   searchContainer: {
-    flexDirection: 'row',
-    gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   searchBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
@@ -212,12 +322,25 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
   },
-  scanButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.md,
+  actionButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   tabs: {
     flexDirection: 'row',
@@ -290,5 +413,48 @@ const styles = StyleSheet.create({
   createButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    ...typography.h3,
+  },
+  modalScroll: {
+    paddingHorizontal: spacing.lg,
+  },
+  daySection: {
+    marginBottom: spacing.lg,
+  },
+  dayTitle: {
+    ...typography.bodyBold,
+    marginBottom: spacing.sm,
+  },
+  mealOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.xs,
+  },
+  mealOptionText: {
+    ...typography.body,
   },
 });

@@ -34,7 +34,13 @@
     "plugins": [
       "expo-font",
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Elite Macro Tracker to access your camera for barcode scanning"
+        }
+      ]
     ],
     "scheme": "natively",
     "experiments": {

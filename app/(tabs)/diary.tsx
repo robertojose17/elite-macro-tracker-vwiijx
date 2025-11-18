@@ -15,7 +15,7 @@ export default function DiaryScreen() {
   const isDark = colorScheme === 'dark';
 
   const goal = mockGoal;
-  const meals = mockMeals;
+  const [meals, setMeals] = useState(mockMeals);
   const mealItems = mockMealItems;
 
   const getMealItems = (mealId: string) => {
@@ -35,6 +35,21 @@ export default function DiaryScreen() {
     );
   };
 
+  const getTotalNutrition = () => {
+    return meals.reduce(
+      (acc, meal) => {
+        const totals = getMealTotals(meal.id);
+        return {
+          calories: acc.calories + totals.calories,
+          protein: acc.protein + totals.protein,
+          carbs: acc.carbs + totals.carbs,
+          fats: acc.fats + totals.fats,
+        };
+      },
+      { calories: 0, protein: 0, carbs: 0, fats: 0 }
+    );
+  };
+
   const getMealIcon = (mealType: MealType) => {
     const icons = {
       breakfast: '🌅',
@@ -48,6 +63,49 @@ export default function DiaryScreen() {
   const getMealLabel = (mealType: MealType) => {
     return mealType.charAt(0).toUpperCase() + mealType.slice(1);
   };
+
+  const handleAddSnack = () => {
+    console.log('Add Snack button pressed');
+    
+    // Check if a snack meal already exists for today
+    const snackMeal = meals.find(meal => meal.meal_type === 'snack');
+    
+    if (!snackMeal) {
+      // Create a new snack meal
+      const newSnackMeal = {
+        id: `meal-snack-${Date.now()}`,
+        user_id: 'user-1',
+        date: new Date().toISOString().split('T')[0],
+        meal_type: 'snack' as MealType,
+      };
+      setMeals([...meals, newSnackMeal]);
+      console.log('Created new snack meal:', newSnackMeal);
+    }
+    
+    // Navigate to add food screen with snack meal type
+    router.push({
+      pathname: '/add-food',
+      params: { mealType: 'snack' }
+    });
+  };
+
+  const handleAddFood = (mealType: MealType) => {
+    console.log('Add food for meal type:', mealType);
+    router.push({
+      pathname: '/add-food',
+      params: { mealType }
+    });
+  };
+
+  const totals = getTotalNutrition();
+
+  // Define the order of meals to display
+  const mealOrder: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+  
+  // Sort meals by the defined order
+  const sortedMeals = [...meals].sort((a, b) => {
+    return mealOrder.indexOf(a.meal_type) - mealOrder.indexOf(b.meal_type);
+  });
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -71,20 +129,20 @@ export default function DiaryScreen() {
       >
         <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={styles.summaryRow}>
-            <SummaryItem label="Calories" value="727" target={goal.daily_calories.toString()} isDark={isDark} />
-            <SummaryItem label="Protein" value="58g" target={`${goal.protein_g}g`} isDark={isDark} />
-            <SummaryItem label="Carbs" value="102g" target={`${goal.carbs_g}g`} isDark={isDark} />
-            <SummaryItem label="Fats" value="11g" target={`${goal.fats_g}g`} isDark={isDark} />
+            <SummaryItem label="Calories" value={Math.round(totals.calories).toString()} target={goal.daily_calories.toString()} isDark={isDark} />
+            <SummaryItem label="Protein" value={`${Math.round(totals.protein)}g`} target={`${goal.protein_g}g`} isDark={isDark} />
+            <SummaryItem label="Carbs" value={`${Math.round(totals.carbs)}g`} target={`${goal.carbs_g}g`} isDark={isDark} />
+            <SummaryItem label="Fats" value={`${Math.round(totals.fats)}g`} target={`${goal.fats_g}g`} isDark={isDark} />
           </View>
         </View>
 
-        {meals.map((meal, index) => {
+        {sortedMeals.map((meal, index) => {
           const items = getMealItems(meal.id);
-          const totals = getMealTotals(meal.id);
+          const mealTotals = getMealTotals(meal.id);
 
           return (
             <React.Fragment key={index}>
-            <View key={meal.id} style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <View style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
               <View style={styles.mealHeader}>
                 <View style={styles.mealTitleRow}>
                   <Text style={styles.mealIcon}>{getMealIcon(meal.meal_type)}</Text>
@@ -94,7 +152,7 @@ export default function DiaryScreen() {
                 </View>
                 <TouchableOpacity
                   style={[styles.addButton, { backgroundColor: colors.primary }]}
-                  onPress={() => router.push('/add-food')}
+                  onPress={() => handleAddFood(meal.meal_type)}
                 >
                   <IconSymbol
                     ios_icon_name="add"
@@ -109,7 +167,7 @@ export default function DiaryScreen() {
                 <>
                   {items.map((item, itemIndex) => (
                     <React.Fragment key={itemIndex}>
-                    <View key={item.id} style={styles.foodItem}>
+                    <View style={styles.foodItem}>
                       <View style={styles.foodInfo}>
                         <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
                           {item.food?.name}
@@ -130,7 +188,7 @@ export default function DiaryScreen() {
                       Total
                     </Text>
                     <Text style={[styles.totalsValue, { color: isDark ? colors.textDark : colors.text }]}>
-                      {Math.round(totals.calories)} kcal • P: {Math.round(totals.protein)}g • C: {Math.round(totals.carbs)}g • F: {Math.round(totals.fats)}g
+                      {Math.round(mealTotals.calories)} kcal • P: {Math.round(mealTotals.protein)}g • C: {Math.round(mealTotals.carbs)}g • F: {Math.round(mealTotals.fats)}g
                     </Text>
                   </View>
                 </>
@@ -146,7 +204,7 @@ export default function DiaryScreen() {
 
         <TouchableOpacity
           style={[styles.addMealButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}
-          onPress={() => console.log('Add meal')}
+          onPress={handleAddSnack}
         >
           <IconSymbol
             ios_icon_name="add_circle"
