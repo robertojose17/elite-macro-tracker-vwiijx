@@ -19,10 +19,7 @@ export default function BarcodeScannerScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
-  const [lastScannedCode, setLastScannedCode] = useState<string>('');
   const processingRef = useRef(false);
 
   useEffect(() => {
@@ -99,13 +96,8 @@ export default function BarcodeScannerScreen() {
     
     console.log(`[Scanner] ✓✓✓ BARCODE DETECTED! Type: ${type}, Data: ${data}`);
     
-    // IMMEDIATELY update the debug label to prove detection is working
-    setLastScannedCode(data);
-    
     processingRef.current = true;
-    setScanned(true);
     setIsProcessing(true);
-    setStatusMessage('Barcode detected!');
 
     // Haptic feedback to indicate successful scan
     try {
@@ -114,13 +106,9 @@ export default function BarcodeScannerScreen() {
       console.log('[Scanner] Haptic feedback not available');
     }
 
-    // Small delay to let user see the debug label update
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     try {
       // Step 1: Check internal database
       console.log('[Scanner] Step 1: Checking internal database...');
-      setStatusMessage('Checking internal database...');
       const internalFood = await findFoodByBarcode(data);
 
       if (internalFood) {
@@ -142,7 +130,6 @@ export default function BarcodeScannerScreen() {
 
       // Step 2: Check OpenFoodFacts (external database)
       console.log('[Scanner] Step 2: Checking OpenFoodFacts API...');
-      setStatusMessage('Searching OpenFoodFacts...');
       const externalProduct = await fetchProductByBarcode(data);
 
       if (externalProduct) {
@@ -153,7 +140,6 @@ export default function BarcodeScannerScreen() {
         
         // Cache in internal database
         console.log('[Scanner] Caching product in internal database...');
-        setStatusMessage('Caching product...');
         const cachedFood = await upsertFood(mappedFood);
         
         console.log('[Scanner] ✓ Product cached successfully:', cachedFood.id);
@@ -188,7 +174,6 @@ export default function BarcodeScannerScreen() {
     } catch (error) {
       console.error('[Scanner] Error processing barcode scan:', error);
       processingRef.current = false;
-      setScanned(false);
       setIsProcessing(false);
       
       Alert.alert(
@@ -200,9 +185,7 @@ export default function BarcodeScannerScreen() {
             onPress: () => {
               // Reset state to allow retry
               processingRef.current = false;
-              setScanned(false);
               setIsProcessing(false);
-              setLastScannedCode('');
             }
           },
           {
@@ -235,16 +218,6 @@ export default function BarcodeScannerScreen() {
         <View style={{ width: 24 }} />
       </View>
 
-      {/* DEBUG LABEL - PROVES SCANNER IS WORKING */}
-      <View style={styles.debugContainer}>
-        <Text style={styles.debugLabel}>
-          Last scanned code:
-        </Text>
-        <Text style={styles.debugValue}>
-          {lastScannedCode || '(waiting for scan...)'}
-        </Text>
-      </View>
-
       <View style={styles.cameraContainer}>
         <CameraView
           style={styles.camera}
@@ -265,7 +238,7 @@ export default function BarcodeScannerScreen() {
               'aztec',
             ],
           }}
-          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+          onBarcodeScanned={isProcessing ? undefined : handleBarcodeScanned}
         />
         
         <View style={styles.overlay}>
@@ -275,7 +248,7 @@ export default function BarcodeScannerScreen() {
             <View style={[styles.corner, styles.bottomLeft]} />
             <View style={[styles.corner, styles.bottomRight]} />
             
-            {scanned && (
+            {isProcessing && (
               <View style={styles.scanSuccessIndicator}>
                 <IconSymbol
                   ios_icon_name="checkmark.circle.fill"
@@ -299,7 +272,7 @@ export default function BarcodeScannerScreen() {
         <View style={styles.processingOverlay}>
           <View style={styles.processingContent}>
             <ActivityIndicator size="large" color="#FFFFFF" />
-            <Text style={styles.processingText}>{statusMessage}</Text>
+            <Text style={styles.processingText}>Processing barcode...</Text>
           </View>
         </View>
       )}
@@ -329,37 +302,6 @@ const styles = StyleSheet.create({
     ...typography.h3,
     flex: 1,
     textAlign: 'center',
-  },
-  debugContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'android' ? 80 : 60,
-    left: 0,
-    right: 0,
-    zIndex: 20,
-    backgroundColor: '#FFD700',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: borderRadius.md,
-    marginHorizontal: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  debugLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#000000',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  debugValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#000000',
-    textAlign: 'center',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   loadingContainer: {
     flex: 1,
