@@ -1,91 +1,388 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, Platform } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol } from "@/components/IconSymbol";
-import { GlassView } from "expo-glass-effect";
-import { useTheme } from "@react-navigation/native";
+
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
+import { useColorScheme } from '@/hooks/useColorScheme';
+import { IconSymbol } from '@/components/IconSymbol';
+import { mockUser, mockGoal } from '@/data/mockData';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileScreen() {
-  const theme = useTheme();
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const user = mockUser;
+  const goal = mockGoal;
+
+  const handleResetOnboarding = async () => {
+    Alert.alert(
+      'Reset Onboarding',
+      'This will clear your onboarding data and let you set up your goals again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('onboarding_complete');
+            await AsyncStorage.removeItem('onboarding_data');
+            router.push('/onboarding/welcome');
+          },
+        },
+      ]
+    );
+  };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.contentContainer,
-          Platform.OS !== 'ios' && styles.contentContainerWithTabBar
-        ]}
-      >
-        <GlassView style={[
-          styles.profileHeader,
-          Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-        ]} glassEffectStyle="regular">
-          <IconSymbol ios_icon_name="person.circle.fill" android_material_icon_name="person" size={80} color={theme.colors.primary} />
-          <Text style={[styles.name, { color: theme.colors.text }]}>John Doe</Text>
-          <Text style={[styles.email, { color: theme.dark ? '#98989D' : '#666' }]}>john.doe@example.com</Text>
-        </GlassView>
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+          Profile
+        </Text>
+      </View>
 
-        <GlassView style={[
-          styles.section,
-          Platform.OS !== 'ios' && { backgroundColor: theme.dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }
-        ]} glassEffectStyle="regular">
-          <View style={styles.infoRow}>
-            <IconSymbol ios_icon_name="phone.fill" android_material_icon_name="phone" size={20} color={theme.dark ? '#98989D' : '#666'} />
-            <Text style={[styles.infoText, { color: theme.colors.text }]}>+1 (555) 123-4567</Text>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={styles.avatarText}>
+              {user.email?.charAt(0).toUpperCase() || 'U'}
+            </Text>
           </View>
-          <View style={styles.infoRow}>
-            <IconSymbol ios_icon_name="location.fill" android_material_icon_name="location-on" size={20} color={theme.dark ? '#98989D' : '#666'} />
-            <Text style={[styles.infoText, { color: theme.colors.text }]}>San Francisco, CA</Text>
+          
+          <Text style={[styles.email, { color: isDark ? colors.textDark : colors.text }]}>
+            {user.email || 'Guest User'}
+          </Text>
+          
+          <View style={[styles.badge, { backgroundColor: user.user_type === 'premium' ? colors.accent : colors.primary }]}>
+            <Text style={styles.badgeText}>
+              {user.user_type === 'premium' ? '⭐ Premium' : user.user_type === 'free' ? 'Free' : 'Guest'}
+            </Text>
           </View>
-        </GlassView>
+        </View>
+
+        <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Your Stats
+          </Text>
+          
+          <View style={styles.statsGrid}>
+            <StatItem label="Height" value={`${user.height} cm`} isDark={isDark} />
+            <StatItem label="Weight" value={`${user.weight} kg`} isDark={isDark} />
+            <StatItem label="Age" value={`${new Date().getFullYear() - new Date(user.dob).getFullYear()} years`} isDark={isDark} />
+            <StatItem label="Sex" value={user.sex === 'male' ? 'Male' : 'Female'} isDark={isDark} />
+          </View>
+        </View>
+
+        <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Current Goals
+          </Text>
+          
+          <View style={styles.goalItem}>
+            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Goal Type
+            </Text>
+            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+              {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
+            </Text>
+          </View>
+          
+          <View style={styles.goalItem}>
+            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Daily Calories
+            </Text>
+            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+              {goal.daily_calories} kcal
+            </Text>
+          </View>
+          
+          <View style={styles.goalItem}>
+            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Macros
+            </Text>
+            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+              P: {goal.protein_g}g • C: {goal.carbs_g}g • F: {goal.fats_g}g
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.editButton, { backgroundColor: colors.primary }]}
+            onPress={handleResetOnboarding}
+          >
+            <Text style={styles.editButtonText}>Edit Goals</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Settings
+          </Text>
+          
+          <SettingItem
+            icon="notifications"
+            label="Reminders"
+            onPress={() => console.log('Reminders')}
+            isDark={isDark}
+          />
+          <SettingItem
+            icon="dark_mode"
+            label="Theme"
+            value={colorScheme === 'dark' ? 'Dark' : 'Light'}
+            onPress={() => console.log('Theme')}
+            isDark={isDark}
+          />
+          <SettingItem
+            icon="language"
+            label="Units"
+            value="Metric"
+            onPress={() => console.log('Units')}
+            isDark={isDark}
+          />
+        </View>
+
+        {user.user_type !== 'premium' && (
+          <TouchableOpacity
+            style={[styles.premiumCard, { backgroundColor: colors.accent }]}
+            onPress={() => console.log('Upgrade to premium')}
+          >
+            <Text style={styles.premiumIcon}>⭐</Text>
+            <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
+            <Text style={styles.premiumSubtitle}>
+              Unlock advanced analytics, custom recipes, and more
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
+          onPress={() => console.log('Logout')}
+        >
+          <Text style={[styles.logoutText, { color: colors.error }]}>
+            Log Out
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function StatItem({ label, value, isDark }: any) {
+  return (
+    <View style={styles.statItem}>
+      <Text style={[styles.statItemLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+        {label}
+      </Text>
+      <Text style={[styles.statItemValue, { color: isDark ? colors.textDark : colors.text }]}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function SettingItem({ icon, label, value, onPress, isDark }: any) {
+  return (
+    <TouchableOpacity style={styles.settingItem} onPress={onPress}>
+      <View style={styles.settingLeft}>
+        <IconSymbol
+          ios_icon_name={icon}
+          android_material_icon_name={icon}
+          size={24}
+          color={isDark ? colors.textDark : colors.text}
+        />
+        <Text style={[styles.settingLabel, { color: isDark ? colors.textDark : colors.text }]}>
+          {label}
+        </Text>
+      </View>
+      <View style={styles.settingRight}>
+        {value && (
+          <Text style={[styles.settingValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            {value}
+          </Text>
+        )}
+        <IconSymbol
+          ios_icon_name="chevron_right"
+          android_material_icon_name="chevron_right"
+          size={20}
+          color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+        />
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    // backgroundColor handled dynamically
-  },
   container: {
     flex: 1,
   },
-  contentContainer: {
-    padding: 20,
+  header: {
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
+    paddingBottom: spacing.md,
   },
-  contentContainerWithTabBar: {
-    paddingBottom: 100, // Extra padding for floating tab bar
+  title: {
+    ...typography.h2,
   },
-  profileHeader: {
+  scrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: 120,
+  },
+  profileCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
     alignItems: 'center',
-    borderRadius: 12,
-    padding: 32,
-    marginBottom: 16,
-    gap: 12,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
   },
-  name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    // color handled dynamically
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '700',
   },
   email: {
-    fontSize: 16,
-    // color handled dynamically
+    ...typography.h3,
+    marginBottom: spacing.sm,
   },
-  section: {
-    borderRadius: 12,
-    padding: 20,
-    gap: 12,
+  badge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
   },
-  infoRow: {
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  sectionTitle: {
+    ...typography.h3,
+    marginBottom: spacing.md,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  statItem: {
+    width: '48%',
+  },
+  statItemLabel: {
+    ...typography.caption,
+    marginBottom: spacing.xs,
+  },
+  statItemValue: {
+    ...typography.bodyBold,
+  },
+  goalsCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  goalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  goalLabel: {
+    ...typography.body,
+  },
+  goalValue: {
+    ...typography.bodyBold,
+  },
+  editButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  editButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  settingsCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
-  infoText: {
+  settingLabel: {
+    ...typography.body,
+  },
+  settingRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  settingValue: {
+    ...typography.body,
+  },
+  premiumCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    boxShadow: '0px 4px 12px rgba(212, 175, 55, 0.3)',
+    elevation: 3,
+  },
+  premiumIcon: {
+    fontSize: 48,
+    marginBottom: spacing.sm,
+  },
+  premiumTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  premiumSubtitle: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  logoutButton: {
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    marginBottom: spacing.md,
+  },
+  logoutText: {
+    fontWeight: '600',
     fontSize: 16,
-    // color handled dynamically
   },
 });
