@@ -20,9 +20,13 @@ export default function BarcodeScannerScreen() {
   const isDark = colorScheme === 'dark';
   const [permission, requestPermission] = useCameraPermissions();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [lastScannedCode, setLastScannedCode] = useState<string>('');
   const processingRef = useRef(false);
 
   useEffect(() => {
+    console.log('[Scanner] Component mounted');
+    console.log('[Scanner] Permission status:', permission?.status);
+    
     if (permission && !permission.granted && !permission.canAskAgain) {
       Alert.alert(
         'Camera Permission Required',
@@ -88,13 +92,20 @@ export default function BarcodeScannerScreen() {
   }
 
   const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
+    console.log('[Scanner] ========================================');
+    console.log('[Scanner] ✓✓✓ BARCODE DETECTED EVENT FIRED! ✓✓✓');
+    console.log('[Scanner] Type:', type);
+    console.log('[Scanner] Data:', data);
+    console.log('[Scanner] ========================================');
+    
+    // Update the test label immediately
+    setLastScannedCode(data);
+    
     // Prevent multiple simultaneous scans
     if (processingRef.current) {
       console.log('[Scanner] Already processing a scan, ignoring');
       return;
     }
-    
-    console.log(`[Scanner] ✓✓✓ BARCODE DETECTED! Type: ${type}, Data: ${data}`);
     
     processingRef.current = true;
     setIsProcessing(true);
@@ -198,6 +209,19 @@ export default function BarcodeScannerScreen() {
     }
   };
 
+  const handleCameraReady = () => {
+    console.log('[Scanner] ✓ Camera is ready and mounted');
+  };
+
+  const handleMountError = (error: any) => {
+    console.error('[Scanner] ✗ Camera mount error:', error);
+    Alert.alert(
+      'Camera Error',
+      'Failed to initialize camera. Please try again.',
+      [{ text: 'OK', onPress: () => router.back() }]
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: '#000000' }]} edges={['top']}>
       <View style={styles.header}>
@@ -239,9 +263,21 @@ export default function BarcodeScannerScreen() {
             ],
           }}
           onBarcodeScanned={isProcessing ? undefined : handleBarcodeScanned}
+          onCameraReady={handleCameraReady}
+          onMountError={handleMountError}
         />
         
         <View style={styles.overlay}>
+          {/* TEST LABEL - Shows last scanned code */}
+          <View style={styles.testLabelContainer}>
+            <Text style={styles.testLabel}>
+              Last scanned code:
+            </Text>
+            <Text style={styles.testValue}>
+              {lastScannedCode || '(waiting for scan...)'}
+            </Text>
+          </View>
+
           <View style={styles.scanArea}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
@@ -349,6 +385,29 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  testLabelContainer: {
+    position: 'absolute',
+    top: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  testLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  testValue: {
+    color: '#4CAF50',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   scanArea: {
     width: 280,
