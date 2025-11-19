@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,11 +24,7 @@ export default function FoodDetailScreen() {
   const [servings, setServings] = useState('1');
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadFood();
-  }, [foodId]);
-
-  const loadFood = async () => {
+  const loadFood = useCallback(async () => {
     try {
       const loadedFood = await getFoodById(foodId);
       setFood(loadedFood);
@@ -37,7 +33,11 @@ export default function FoodDetailScreen() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [foodId]);
+
+  useEffect(() => {
+    loadFood();
+  }, [loadFood]);
 
   if (isLoading) {
     return (

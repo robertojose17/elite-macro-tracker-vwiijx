@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Platform, Modal, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,26 +30,7 @@ export default function AddFoodScreen() {
     loadInitialData();
   }, []);
 
-  useEffect(() => {
-    if (searchQuery.length > 0) {
-      performSearch();
-    } else {
-      setSearchResults([]);
-    }
-  }, [searchQuery]);
-
-  const loadInitialData = async () => {
-    try {
-      const recent = await getRecentFoods();
-      const favorites = await getFavoriteFoods();
-      setRecentFoods(recent);
-      setFavoriteFoods(favorites);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
-
-  const performSearch = async () => {
+  const performSearch = useCallback(async () => {
     if (searchQuery.trim().length < 2) {
       setSearchResults([]);
       return;
@@ -82,6 +63,25 @@ export default function AddFoodScreen() {
       setSearchResults(internalResults);
     } finally {
       setIsSearching(false);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (searchQuery.length > 0) {
+      performSearch();
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery, performSearch]);
+
+  const loadInitialData = async () => {
+    try {
+      const recent = await getRecentFoods();
+      const favorites = await getFavoriteFoods();
+      setRecentFoods(recent);
+      setFavoriteFoods(favorites);
+    } catch (error) {
+      console.error('Error loading initial data:', error);
     }
   };
 
