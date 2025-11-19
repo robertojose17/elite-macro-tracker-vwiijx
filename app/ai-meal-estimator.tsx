@@ -228,15 +228,32 @@ export default function AIMealEstimatorScreen() {
             color={isDark ? colors.textDark : colors.text}
           />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-          AI Meal Estimator
-        </Text>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+            AI Meal Estimator
+          </Text>
+          <Text style={[styles.subtitle, { color: colors.primary }]}>
+            Powered by Hugging Face
+          </Text>
+        </View>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {!estimationResult && !error && (
           <React.Fragment>
+            <View style={[styles.infoCard, { backgroundColor: colors.primary + '15' }]}>
+              <IconSymbol
+                ios_icon_name="info.circle"
+                android_material_icon_name="info"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={[styles.infoText, { color: isDark ? colors.textDark : colors.text }]}>
+                Using AI Model: meta-llama/Llama-3.2-3B-Instruct
+              </Text>
+            </View>
+
             <View style={styles.section}>
               <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
                 Describe your meal
@@ -383,9 +400,17 @@ export default function AIMealEstimatorScreen() {
                 </Text>
               </View>
               {estimationResult.aiModel && (
-                <Text style={[styles.aiModel, { color: colors.primary }]}>
-                  Model: {estimationResult.aiModel}
-                </Text>
+                <View style={[styles.aiModelBadge, { backgroundColor: colors.primary + '20' }]}>
+                  <IconSymbol
+                    ios_icon_name="cpu"
+                    android_material_icon_name="memory"
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text style={[styles.aiModel, { color: colors.primary }]}>
+                    {estimationResult.aiModel}
+                  </Text>
+                </View>
               )}
               <Text style={[styles.assumptions, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {estimationResult.assumptions}
@@ -568,14 +593,34 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingBottom: spacing.md,
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
   title: {
     ...typography.h3,
-    flex: 1,
-    textAlign: 'center',
+  },
+  subtitle: {
+    ...typography.small,
+    fontWeight: '600',
+    marginTop: 2,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xxl * 2,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+  },
+  infoText: {
+    ...typography.small,
+    fontWeight: '600',
+    flex: 1,
   },
   section: {
     marginBottom: spacing.lg,
@@ -683,15 +728,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   resultTitle: {
     ...typography.bodyBold,
   },
+  aiModelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
   aiModel: {
     ...typography.small,
     fontWeight: '600',
-    marginBottom: spacing.sm,
   },
   assumptions: {
     ...typography.body,

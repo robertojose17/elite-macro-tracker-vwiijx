@@ -5,6 +5,7 @@
  * This utility calls a Supabase Edge Function to estimate nutritional information
  * from a meal description and optional photo using Hugging Face's Llama 3.2 model.
  * 
+ * AI Model: Hugging Face - meta-llama/Llama-3.2-3B-Instruct
  * The Hugging Face API key is embedded in the Edge Function for your convenience.
  * The Edge Function 'ai-meal-estimate' has been deployed and is ready to use.
  */
@@ -58,7 +59,9 @@ async function imageUriToBase64(uri: string): Promise<string> {
 }
 
 /**
- * Estimate meal nutrition using Supabase Edge Function with OpenAI
+ * Estimate meal nutrition using Supabase Edge Function with Hugging Face AI
+ * 
+ * AI Model: Hugging Face - meta-llama/Llama-3.2-3B-Instruct
  */
 export async function estimateMealWithAI(
   description: string,
@@ -67,6 +70,7 @@ export async function estimateMealWithAI(
   console.log('[AI Estimator] Starting estimation...');
   console.log('[AI Estimator] Description:', description);
   console.log('[AI Estimator] Has image:', !!imageUri);
+  console.log('[AI Estimator] AI Model: Hugging Face - meta-llama/Llama-3.2-3B-Instruct');
 
   try {
     // Prepare request body
@@ -98,12 +102,24 @@ export async function estimateMealWithAI(
         );
       }
       
-      if (error.message?.includes('Model is loading')) {
-        throw new Error('AI model is warming up. Please wait a few seconds and try again.');
+      if (error.message?.includes('Model is loading') || error.message?.includes('503')) {
+        throw new Error(
+          '🔄 AI model is warming up...\n\n' +
+          'The Hugging Face model needs 10-20 seconds to start. Please wait a moment and try again.\n\n' +
+          'This only happens on the first request after a period of inactivity.'
+        );
       }
       
-      if (error.message?.includes('Rate limit')) {
-        throw new Error('Too many requests. Please wait a moment and try again.');
+      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+        throw new Error('⏱️ Too many requests. Please wait a moment and try again.');
+      }
+      
+      if (error.message?.includes('timeout') || error.message?.includes('504')) {
+        throw new Error(
+          '⏱️ Request timeout.\n\n' +
+          'The AI model is taking too long to respond. This can happen when the model is cold-starting.\n\n' +
+          'Please try again in a few seconds.'
+        );
       }
       
       throw new Error(error.message || 'AI estimation failed. Please try again or log manually.');
@@ -139,7 +155,7 @@ export async function estimateMealWithAI(
 
     console.log('[AI Estimator] Estimation successful');
     console.log('[AI Estimator] Items:', data.items.length);
-    console.log('[AI Estimator] AI Model:', data.aiModel || 'Unknown');
+    console.log('[AI Estimator] AI Model:', data.aiModel || 'Hugging Face - meta-llama/Llama-3.2-3B-Instruct');
     
     return data as EstimationResult;
   } catch (error: any) {
