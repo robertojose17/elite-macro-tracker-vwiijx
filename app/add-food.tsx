@@ -129,6 +129,17 @@ export default function AddFoodScreen() {
     setShowCopyModal(true);
   };
 
+  const handleAIMealEstimator = () => {
+    console.log('Opening AI Meal Estimator...');
+    router.push({
+      pathname: '/ai-meal-estimator',
+      params: {
+        mealType: mealType,
+        date: date
+      }
+    });
+  };
+
   const handleCloseCopyModal = () => {
     setShowCopyModal(false);
   };
@@ -255,6 +266,21 @@ export default function AddFoodScreen() {
             color="#FFFFFF"
           />
           <Text style={styles.actionButtonText}>Copy from Previous</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={[styles.actionButtonWide, { backgroundColor: colors.accent }]}
+          onPress={handleAIMealEstimator}
+        >
+          <IconSymbol
+            ios_icon_name="sparkles"
+            android_material_icon_name="auto_awesome"
+            size={20}
+            color="#FFFFFF"
+          />
+          <Text style={styles.actionButtonText}>AI Meal Estimator</Text>
         </TouchableOpacity>
       </View>
 
@@ -490,6 +516,14 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+  },
+  actionButtonWide: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -5,10 +5,13 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Food } from '@/types';
+import { Food, Meal, MealItem, DailySummary, MealType } from '@/types';
 import { mockFoods } from '@/data/mockData';
 
 const FOODS_STORAGE_KEY = '@elite_macro_foods';
+const MEALS_STORAGE_KEY = '@elite_macro_meals';
+const MEAL_ITEMS_STORAGE_KEY = '@elite_macro_meal_items';
+const DAILY_SUMMARY_STORAGE_KEY = '@elite_macro_daily_summary';
 
 /**
  * Initialize food database with mock data
@@ -173,5 +176,174 @@ export async function getFavoriteFoods(): Promise<Food[]> {
   } catch (error) {
     console.error('[FoodDB] Error getting favorite foods:', error);
     return [];
+  }
+}
+
+/**
+ * Get or create meal for a specific date and meal type
+ */
+async function getOrCreateMeal(date: string, mealType: MealType): Promise<Meal> {
+  try {
+    const mealsData = await AsyncStorage.getItem(MEALS_STORAGE_KEY);
+    const meals: Meal[] = mealsData ? JSON.parse(mealsData) : [];
+    
+    // Find existing meal
+    let meal = meals.find(m => m.date === date && m.meal_type === mealType);
+    
+    if (!meal) {
+      // Create new meal
+      meal = {
+        id: `meal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        user_id: 'user-1', // In a real app, get from auth context
+        date,
+        meal_type: mealType,
+      };
+      meals.push(meal);
+      await AsyncStorage.setItem(MEALS_STORAGE_KEY, JSON.stringify(meals));
+      console.log(`[FoodDB] Created new meal: ${meal.id}`);
+    }
+    
+    return meal;
+  } catch (error) {
+    console.error('[FoodDB] Error getting or creating meal:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a meal item (for AI-estimated items or custom items)
+ */
+export async function addMealItem(params: {
+  mealType: string;
+  date: string;
+  foodName: string;
+  servingDescription: string;
+  quantity: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+  fiber: number;
+}): Promise<MealItem> {
+  try {
+    console.log('[FoodDB] Adding meal item:', params.foodName);
+    
+    // Get or create the meal
+    const meal = await getOrCreateMeal(params.date, params.mealType as MealType);
+    
+    // Create a custom food entry for this item
+    const customFood: Food = {
+      id: `food-custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: params.foodName,
+      serving_amount: 1,
+      serving_unit: params.servingDescription,
+      calories: params.calories,
+      protein: params.protein,
+      carbs: params.carbs,
+      fats: params.fats,
+      fiber: params.fiber,
+      user_created: true,
+      is_favorite: false,
+    };
+    
+    // Save the custom food
+    await upsertFood(customFood);
+    
+    // Create the meal item
+    const mealItem: MealItem = {
+      id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      meal_id: meal.id,
+      food_id: customFood.id,
+      food: customFood,
+      quantity: params.quantity,
+      calories: params.calories * params.quantity,
+      protein: params.protein * params.quantity,
+      carbs: params.carbs * params.quantity,
+      fats: params.fats * params.quantity,
+      fiber: params.fiber * params.quantity,
+    };
+    
+    // Save the meal item
+    const itemsData = await AsyncStorage.getItem(MEAL_ITEMS_STORAGE_KEY);
+    const items: MealItem[] = itemsData ? JSON.parse(itemsData) : [];
+    items.push(mealItem);
+    await AsyncStorage.setItem(MEAL_ITEMS_STORAGE_KEY, JSON.stringify(items));
+    
+    console.log('[FoodDB] Meal item added successfully:', mealItem.id);
+    return mealItem;
+  } catch (error) {
+    console.error('[FoodDB] Error adding meal item:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update daily summary for a specific date
+ */
+export async function updateDailySummary(date: string): Promise<void> {
+  try {
+    console.log('[FoodDB] Updating daily summary for:', date);
+    
+    // Get all meals for this date
+    const mealsData = await AsyncStorage.getItem(MEALS_STORAGE_KEY);
+    const meals: Meal[] = mealsData ? JSON.parse(mealsData) : [];
+    const todayMeals = meals.filter(m => m.date === date);
+    
+    // Get all meal items for today's meals
+    const itemsData = await AsyncStorage.getItem(MEAL_ITEMS_STORAGE_KEY);
+    const allItems: MealItem[] = itemsData ? JSON.parse(itemsData) : [];
+    const todayItems = allItems.filter(item => 
+      todayMeals.some(meal => meal.id === item.meal_id)
+    );
+    
+    // Calculate totals
+    const totals = todayItems.reduce(
+      (acc, item) => ({
+        calories: acc.calories + item.calories,
+        protein: acc.protein + item.protein,
+        carbs: acc.carbs + item.carbs,
+        fats: acc.fats + item.fats,
+        fiber: acc.fiber + item.fiber,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fats: 0, fiber: 0 }
+    );
+    
+    // Get existing daily summary
+    const summaryData = await AsyncStorage.getItem(DAILY_SUMMARY_STORAGE_KEY);
+    const summaries: DailySummary[] = summaryData ? JSON.parse(summaryData) : [];
+    
+    // Find or create summary for this date
+    let summaryIndex = summaries.findIndex(s => s.date === date);
+    
+    if (summaryIndex >= 0) {
+      // Update existing summary
+      summaries[summaryIndex] = {
+        ...summaries[summaryIndex],
+        total_calories: totals.calories,
+        total_protein: totals.protein,
+        total_carbs: totals.carbs,
+        total_fats: totals.fats,
+        total_fiber: totals.fiber,
+      };
+    } else {
+      // Create new summary
+      summaries.push({
+        id: `summary-${Date.now()}`,
+        user_id: 'user-1', // In a real app, get from auth context
+        date,
+        total_calories: totals.calories,
+        total_protein: totals.protein,
+        total_carbs: totals.carbs,
+        total_fats: totals.fats,
+        total_fiber: totals.fiber,
+        water_ml: 0,
+      });
+    }
+    
+    await AsyncStorage.setItem(DAILY_SUMMARY_STORAGE_KEY, JSON.stringify(summaries));
+    console.log('[FoodDB] Daily summary updated successfully');
+  } catch (error) {
+    console.error('[FoodDB] Error updating daily summary:', error);
+    throw error;
   }
 }
