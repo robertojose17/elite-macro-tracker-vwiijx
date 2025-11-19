@@ -3,14 +3,10 @@
  * AI Meal Estimator Utility
  * 
  * This utility calls a Supabase Edge Function to estimate nutritional information
- * from a meal description and optional photo using OpenAI's GPT-4o-mini model.
+ * from a meal description and optional photo using Hugging Face's Llama 3.2 model.
  * 
- * Setup Instructions:
- * 1. Get an OpenAI API key from https://platform.openai.com/api-keys
- * 2. Set your OpenAI API key in Supabase secrets:
- *    Run: supabase secrets set OPENAI_API_KEY=your_key_here
- *    Or set it in the Supabase Dashboard under Project Settings > Edge Functions > Secrets
- * 3. The Edge Function 'ai-meal-estimate' has been deployed and is ready to use
+ * The Hugging Face API key is embedded in the Edge Function for your convenience.
+ * The Edge Function 'ai-meal-estimate' has been deployed and is ready to use.
  */
 
 import { supabase } from '@/app/integrations/supabase/client';
@@ -97,12 +93,13 @@ export async function estimateMealWithAI(
       // Handle specific error cases
       if (error.message?.includes('not configured')) {
         throw new Error(
-          '⚠️ OpenAI API key not configured!\n\n' +
-          'To use the AI Meal Estimator:\n' +
-          '1. Get an OpenAI API key from https://platform.openai.com/api-keys\n' +
-          '2. Set it in Supabase: supabase secrets set OPENAI_API_KEY=your_key\n' +
-          '3. Or set it in Supabase Dashboard > Project Settings > Edge Functions > Secrets'
+          '⚠️ AI service not configured!\n\n' +
+          'Please contact support if this issue persists.'
         );
+      }
+      
+      if (error.message?.includes('Model is loading')) {
+        throw new Error('AI model is warming up. Please wait a few seconds and try again.');
       }
       
       if (error.message?.includes('Rate limit')) {
