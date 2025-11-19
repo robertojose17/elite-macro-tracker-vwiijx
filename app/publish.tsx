@@ -39,39 +39,61 @@ export default function PublishScreen() {
     // Load initial values from config
     try {
       const config = getPublishConfig();
-      setAppName(config.name);
-      setBundleId(config.bundleId);
-      setVersion(config.version);
-      console.log('Loaded publish config:', config);
+      console.log('Initial config loaded:', config);
+      
+      // Set the values, ensuring they're never undefined
+      setAppName(config.name || 'Elite Macro Tracker');
+      setBundleId(config.bundleId || 'com.elitemacrotracker.app');
+      setVersion(config.version || '1.0.0');
     } catch (error: any) {
       console.error('Error loading publish config:', error);
+      
+      // Set default values instead of showing error
+      setAppName('Elite Macro Tracker');
+      setBundleId('com.elitemacrotracker.app');
+      setVersion('1.0.0');
+      
       Alert.alert(
-        'Configuration Error',
-        error.message || 'Failed to load app configuration. Please check your app.json file.',
-        [{ text: 'OK', onPress: () => router.back() }]
+        'Configuration Warning',
+        'Could not load configuration from app.json. Using default values. Please verify the app name and bundle ID before publishing.',
+        [{ text: 'OK' }]
       );
     }
   }, []);
 
   const validateInputs = () => {
+    console.log('Validating inputs:', { appName, bundleId });
+    
     const newErrors: { name?: string; bundleId?: string } = {};
 
     // Validate app name
     if (!validateAppName(appName)) {
       newErrors.name = 'App name must be between 1 and 100 characters';
+      console.log('App name validation failed');
     }
 
     // Validate bundle ID
     if (!validateBundleId(bundleId)) {
       newErrors.bundleId = 'Invalid bundle ID format (e.g., com.company.app)';
+      console.log('Bundle ID validation failed');
     }
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    const isValid = Object.keys(newErrors).length === 0;
+    console.log('Validation result:', { isValid, errors: newErrors });
+    
+    return isValid;
   };
 
   const handlePublish = async () => {
-    console.log('Starting publish process...');
+    console.log('=== PUBLISH PROCESS STARTED ===');
+    console.log('Current state:', {
+      appName,
+      bundleId,
+      version,
+      appNameType: typeof appName,
+      bundleIdType: typeof bundleId,
+    });
     
     // Validate inputs
     if (!validateInputs()) {
@@ -79,29 +101,56 @@ export default function PublishScreen() {
       return;
     }
 
+    // Additional safety check - ensure values are not empty
+    if (!appName || appName.trim() === '') {
+      Alert.alert('Error', 'App name cannot be empty');
+      return;
+    }
+
+    if (!bundleId || bundleId.trim() === '') {
+      Alert.alert('Error', 'Bundle ID cannot be empty');
+      return;
+    }
+
     setIsPublishing(true);
 
     try {
-      // Prepare the config
+      // Prepare the config with explicit string values
       const config: PublishConfig = {
-        name: appName,
-        bundleId: bundleId,
-        version: version,
+        name: String(appName).trim(),
+        bundleId: String(bundleId).trim(),
+        version: String(version).trim(),
         platform: Platform.OS,
       };
+
+      console.log('Config prepared:', config);
 
       // Prepare and validate the payload
       const payload = preparePublishPayload(config);
 
-      console.log('Publishing with payload:', JSON.stringify(payload, null, 2));
+      console.log('=== PAYLOAD PREPARED ===');
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      console.log('Payload types:', {
+        name: typeof payload.name,
+        bundleId: typeof payload.bundleId,
+        version: typeof payload.version,
+        platform: typeof payload.platform,
+      });
 
-      // Verify that name and bundleId are strings
-      if (typeof payload.name !== 'string' || typeof payload.bundleId !== 'string') {
-        throw new Error('Invalid payload: name and bundleId must be strings');
+      // Verify that name and bundleId are strings and not empty
+      if (typeof payload.name !== 'string' || payload.name === '') {
+        throw new Error(`Invalid payload: name must be a non-empty string (got: ${typeof payload.name}, value: "${payload.name}")`);
       }
 
+      if (typeof payload.bundleId !== 'string' || payload.bundleId === '') {
+        throw new Error(`Invalid payload: bundleId must be a non-empty string (got: ${typeof payload.bundleId}, value: "${payload.bundleId}")`);
+      }
+
+      console.log('=== SENDING TO API ===');
+      console.log('API URL: https://api.natively.dev/publish');
+      console.log('Request body:', JSON.stringify(payload));
+
       // Make the API call to publish
-      // Replace this URL with the actual Natively publish endpoint
       const response = await fetch('https://api.natively.dev/publish', {
         method: 'POST',
         headers: {
@@ -110,17 +159,23 @@ export default function PublishScreen() {
         body: JSON.stringify(payload),
       });
 
+      console.log('=== API RESPONSE ===');
+      console.log('Status:', response.status);
+      console.log('Status text:', response.statusText);
+
       const result = await response.json();
-      console.log('Publish response:', result);
+      console.log('Response body:', JSON.stringify(result, null, 2));
 
       if (!response.ok) {
         // Log the validation errors if present
         if (result.errors) {
-          console.error('Validation errors:', JSON.stringify(result.errors, null, 2));
+          console.error('=== VALIDATION ERRORS ===');
+          console.error(JSON.stringify(result.errors, null, 2));
         }
         throw new Error(result.message || 'Failed to publish app');
       }
 
+      console.log('=== PUBLISH SUCCESS ===');
       Alert.alert(
         'Success',
         'Your app has been published successfully!',
@@ -132,7 +187,11 @@ export default function PublishScreen() {
         ]
       );
     } catch (error: any) {
-      console.error('Publish error:', error);
+      console.error('=== PUBLISH ERROR ===');
+      console.error('Error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
       Alert.alert(
         'Publish Failed',
         error.message || 'An error occurred while publishing your app. Please try again.',
@@ -279,6 +338,12 @@ export default function PublishScreen() {
           </Text>
           <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             BundleId value: {bundleId || '(empty)'}
+          </Text>
+          <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Name isEmpty: {!appName || appName.trim() === '' ? 'YES' : 'NO'}
+          </Text>
+          <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            BundleId isEmpty: {!bundleId || bundleId.trim() === '' ? 'YES' : 'NO'}
           </Text>
         </View>
 

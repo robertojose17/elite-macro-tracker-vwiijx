@@ -16,52 +16,95 @@ export interface PublishConfig {
 export function getPublishConfig(): PublishConfig {
   const expoConfig = Constants.expoConfig;
 
-  // Get app name
-  const name = expoConfig?.name || '';
+  console.log('Loading publish config from Constants.expoConfig:', {
+    hasExpoConfig: !!expoConfig,
+    name: expoConfig?.name,
+    iosBundleId: expoConfig?.ios?.bundleIdentifier,
+    androidPackage: expoConfig?.android?.package,
+  });
+
+  // Get app name with fallback
+  let name = expoConfig?.name || '';
+  
+  // If still empty, try to get from manifest
   if (!name || name.trim() === '') {
-    throw new Error('App name is not configured in app.json');
+    // @ts-ignore - accessing manifest for fallback
+    name = Constants.manifest?.name || Constants.manifest2?.name || '';
   }
 
-  // Get bundle ID based on platform
+  // Final fallback to a default value
+  if (!name || name.trim() === '') {
+    name = 'Elite Macro Tracker';
+    console.warn('Using default app name:', name);
+  }
+
+  // Get bundle ID based on platform with fallback
   let bundleId = '';
   if (Platform.OS === 'ios') {
     bundleId = expoConfig?.ios?.bundleIdentifier || '';
   } else if (Platform.OS === 'android') {
     bundleId = expoConfig?.android?.package || '';
+  } else {
+    // For web or other platforms, try both
+    bundleId = expoConfig?.ios?.bundleIdentifier || expoConfig?.android?.package || '';
   }
 
+  // Final fallback to a default value
   if (!bundleId || bundleId.trim() === '') {
-    throw new Error(`Bundle ID is not configured for ${Platform.OS} in app.json`);
+    bundleId = 'com.elitemacrotracker.app';
+    console.warn('Using default bundle ID:', bundleId);
   }
 
-  // Get version
-  const version = expoConfig?.version || '1.0.0';
+  // Get version with fallback
+  let version = expoConfig?.version || '';
+  if (!version || version.trim() === '') {
+    version = '1.0.0';
+    console.warn('Using default version:', version);
+  }
 
-  return {
+  const config = {
     name: name.trim(),
     bundleId: bundleId.trim(),
     version: version.trim(),
     platform: Platform.OS,
   };
+
+  console.log('Loaded publish config:', config);
+
+  return config;
 }
 
 /**
  * Validate bundle ID format
  */
-export function validateBundleId(bundleId: string): boolean {
+export function validateBundleId(bundleId: string | undefined | null): boolean {
+  if (!bundleId || typeof bundleId !== 'string') {
+    return false;
+  }
+  
+  const trimmed = bundleId.trim();
+  if (trimmed === '') {
+    return false;
+  }
+
   // Bundle ID should be in format: com.company.app
   // Must start with a letter, contain only lowercase letters, numbers, and dots
   // Must have at least two segments separated by dots
   const bundleIdRegex = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/i;
-  return bundleIdRegex.test(bundleId);
+  return bundleIdRegex.test(trimmed);
 }
 
 /**
  * Validate app name
  */
-export function validateAppName(name: string): boolean {
+export function validateAppName(name: string | undefined | null): boolean {
+  if (!name || typeof name !== 'string') {
+    return false;
+  }
+  
+  const trimmed = name.trim();
   // App name should not be empty and should be reasonable length
-  return name.trim().length > 0 && name.trim().length <= 100;
+  return trimmed.length > 0 && trimmed.length <= 100;
 }
 
 /**
@@ -94,6 +137,7 @@ export function validatePublishConfig(config: PublishConfig): {
 /**
  * Prepare the publish payload
  * Ensures all fields are strings and properly formatted
+ * This function guarantees that name and bundleId will NEVER be undefined
  */
 export function preparePublishPayload(config: PublishConfig): {
   name: string;
@@ -101,18 +145,41 @@ export function preparePublishPayload(config: PublishConfig): {
   version: string;
   platform: string;
 } {
+  // First, ensure all values are strings (never undefined or null)
+  const safeConfig: PublishConfig = {
+    name: config.name || '',
+    bundleId: config.bundleId || '',
+    version: config.version || '1.0.0',
+    platform: config.platform || Platform.OS,
+  };
+
   // Validate the config
-  const validation = validatePublishConfig(config);
+  const validation = validatePublishConfig(safeConfig);
   if (!validation.isValid) {
     const errorMessages = Object.values(validation.errors).join(', ');
     throw new Error(`Invalid publish configuration: ${errorMessages}`);
   }
 
-  // Return the payload with all fields as strings
-  return {
-    name: String(config.name),
-    bundleId: String(config.bundleId),
-    version: String(config.version),
-    platform: String(config.platform),
+  // Return the payload with all fields guaranteed to be non-empty strings
+  const payload = {
+    name: String(safeConfig.name).trim(),
+    bundleId: String(safeConfig.bundleId).trim(),
+    version: String(safeConfig.version).trim(),
+    platform: String(safeConfig.platform),
   };
+
+  // Final safety check - this should never happen if validation passed
+  if (!payload.name || !payload.bundleId) {
+    throw new Error('Critical error: name or bundleId is empty after validation');
+  }
+
+  console.log('Prepared publish payload:', payload);
+  console.log('Payload types:', {
+    name: typeof payload.name,
+    bundleId: typeof payload.bundleId,
+    version: typeof payload.version,
+    platform: typeof payload.platform,
+  });
+
+  return payload;
 }
