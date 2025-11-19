@@ -146,6 +146,19 @@ export default function ProfileScreen() {
           />
         </View>
 
+        <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Developer
+          </Text>
+          
+          <SettingItem
+            icon="cloud_upload"
+            label="Publish App"
+            onPress={() => router.push('/publish')}
+            isDark={isDark}
+          />
+        </View>
+
         {user.user_type !== 'premium' && (
           <TouchableOpacity
             style={[styles.premiumCard, { backgroundColor: colors.accent }]}
