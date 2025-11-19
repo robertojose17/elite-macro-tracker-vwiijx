@@ -1,23 +1,38 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { BarCodeScanner } from "expo-barcode-scanner";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
 
 export default function BarcodeScannerScreen() {
   const router = useRouter();
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scannedBarcode, setScannedBarcode] = useState("");
 
-  useEffect(() => {
-    (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
-      setHasPermission(status === "granted");
-    })();
-  }, []);
+  if (!permission) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.messageText}>Loading camera...</Text>
+      </View>
+    );
+  }
 
-  const handleBarCodeScanned = ({ type, data }: { type: string; data: string }) => {
+  if (!permission.granted) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.messageText}>We need your permission to use the camera</Text>
+        <TouchableOpacity 
+          style={styles.permissionButton}
+          onPress={requestPermission}
+        >
+          <Text style={styles.permissionButtonText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
     if (scanned) return;
     
     setScanned(true);
@@ -28,28 +43,29 @@ export default function BarcodeScannerScreen() {
     console.log("Data:", data);
   };
 
-  if (hasPermission === null) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.messageText}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (hasPermission === false) {
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.messageText}>No access to camera.</Text>
-        <Text style={styles.messageText}>Please enable camera permissions in settings.</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <BarCodeScanner
-        onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
-        style={styles.scanner}
+      <CameraView
+        style={styles.camera}
+        facing="back"
+        onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+        barcodeScannerSettings={{
+          barcodeTypes: [
+            "ean13",
+            "ean8",
+            "upc_a",
+            "upc_e",
+            "code128",
+            "code39",
+            "code93",
+            "codabar",
+            "itf14",
+            "qr",
+            "pdf417",
+            "aztec",
+            "datamatrix"
+          ],
+        }}
       />
       
       <View style={styles.overlay}>
@@ -94,7 +110,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  scanner: {
+  camera: {
     ...StyleSheet.absoluteFillObject,
   },
   overlay: {
@@ -173,6 +189,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     textAlign: "center",
-    marginBottom: 8,
+    marginBottom: 16,
+  },
+  permissionButton: {
+    backgroundColor: "#2196F3",
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  permissionButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });
