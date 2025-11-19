@@ -2,11 +2,15 @@
 /**
  * AI Meal Estimator Utility
  * 
- * This utility calls a backend API endpoint to estimate nutritional information
- * from a meal description and optional photo.
+ * This utility calls a Supabase Edge Function to estimate nutritional information
+ * from a meal description and optional photo using a free AI provider (Hugging Face).
  * 
- * The backend can use any LLM provider (Hugging Face, OpenAI, etc.)
- * without exposing API keys to the mobile app.
+ * Setup Instructions:
+ * 1. Enable Supabase in Natively
+ * 2. Get a free Hugging Face API token from https://huggingface.co/settings/tokens
+ * 3. Deploy the Edge Function (code provided separately)
+ * 4. Set your Hugging Face token: supabase secrets set HUGGINGFACE_API_KEY=your_token_here
+ * 5. Update SUPABASE_URL and SUPABASE_ANON_KEY below with your project details
  */
 
 interface EstimatedItem {
@@ -29,131 +33,20 @@ interface EstimationResult {
     fats_g: number;
     fiber_g: number;
   };
+  aiModel?: string;
 }
 
-// IMPORTANT: Replace this with your actual backend API endpoint
-// Options:
-// 1. Supabase Edge Function: https://your-project.supabase.co/functions/v1/ai-meal-estimate
-// 2. Your own backend server: https://your-api.com/api/ai-meal-estimate
-// 3. For development/testing: Use the mock endpoint below
-const API_ENDPOINT = 'https://your-backend-api.com/api/ai-meal-estimate';
+// TODO: Replace these with your Supabase project details after enabling Supabase
+const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // e.g., 'https://xxxxx.supabase.co'
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-// Set this to true to use mock data for testing (no backend required)
-const USE_MOCK_DATA = true;
-
-/**
- * Mock estimation for testing without a backend
- */
-function getMockEstimation(description: string): EstimationResult {
-  console.log('[AI Estimator] Using mock data for testing');
-  
-  // Simple mock based on common keywords
-  const items: EstimatedItem[] = [];
-  const lowerDesc = description.toLowerCase();
-  
-  if (lowerDesc.includes('egg')) {
-    items.push({
-      name: 'Scrambled Eggs',
-      serving_description: '2 large eggs',
-      calories: 140,
-      protein_g: 12,
-      carbs_g: 2,
-      fats_g: 10,
-      fiber_g: 0,
-    });
+// Edge Function endpoint
+const getEdgeFunctionUrl = () => {
+  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+    return null;
   }
-  
-  if (lowerDesc.includes('toast') || lowerDesc.includes('bread')) {
-    items.push({
-      name: 'Whole Wheat Toast',
-      serving_description: '1 slice',
-      calories: 80,
-      protein_g: 4,
-      carbs_g: 14,
-      fats_g: 1,
-      fiber_g: 2,
-    });
-  }
-  
-  if (lowerDesc.includes('banana')) {
-    items.push({
-      name: 'Banana',
-      serving_description: '1 medium',
-      calories: 105,
-      protein_g: 1,
-      carbs_g: 27,
-      fats_g: 0,
-      fiber_g: 3,
-    });
-  }
-  
-  if (lowerDesc.includes('chicken')) {
-    items.push({
-      name: 'Grilled Chicken Breast',
-      serving_description: '4 oz',
-      calories: 185,
-      protein_g: 35,
-      carbs_g: 0,
-      fats_g: 4,
-      fiber_g: 0,
-    });
-  }
-  
-  if (lowerDesc.includes('rice')) {
-    items.push({
-      name: 'White Rice',
-      serving_description: '1 cup cooked',
-      calories: 205,
-      protein_g: 4,
-      carbs_g: 45,
-      fats_g: 0,
-      fiber_g: 1,
-    });
-  }
-  
-  if (lowerDesc.includes('salad')) {
-    items.push({
-      name: 'Mixed Green Salad',
-      serving_description: '2 cups',
-      calories: 20,
-      protein_g: 2,
-      carbs_g: 4,
-      fats_g: 0,
-      fiber_g: 2,
-    });
-  }
-  
-  // If no items matched, provide a generic meal
-  if (items.length === 0) {
-    items.push({
-      name: 'Mixed Meal',
-      serving_description: '1 serving',
-      calories: 400,
-      protein_g: 20,
-      carbs_g: 45,
-      fats_g: 15,
-      fiber_g: 5,
-    });
-  }
-  
-  // Calculate totals
-  const totals = items.reduce(
-    (acc, item) => ({
-      calories: acc.calories + item.calories,
-      protein_g: acc.protein_g + item.protein_g,
-      carbs_g: acc.carbs_g + item.carbs_g,
-      fats_g: acc.fats_g + item.fats_g,
-      fiber_g: acc.fiber_g + item.fiber_g,
-    }),
-    { calories: 0, protein_g: 0, carbs_g: 0, fats_g: 0, fiber_g: 0 }
-  );
-  
-  return {
-    assumptions: 'Mock estimation based on common food keywords. For accurate results, please configure a backend API endpoint.',
-    items,
-    totals,
-  };
-}
+  return `${SUPABASE_URL}/functions/v1/ai-meal-estimate`;
+};
 
 /**
  * Convert image URI to base64 data URL
@@ -179,7 +72,7 @@ async function imageUriToBase64(uri: string): Promise<string> {
 }
 
 /**
- * Estimate meal nutrition using backend API
+ * Estimate meal nutrition using Supabase Edge Function with free AI provider
  */
 export async function estimateMealWithAI(
   description: string,
@@ -189,18 +82,18 @@ export async function estimateMealWithAI(
   console.log('[AI Estimator] Description:', description);
   console.log('[AI Estimator] Has image:', !!imageUri);
 
-  // Use mock data if enabled (for testing without backend)
-  if (USE_MOCK_DATA) {
-    console.log('[AI Estimator] Mock mode enabled - returning test data');
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return getMockEstimation(description);
-  }
+  const edgeFunctionUrl = getEdgeFunctionUrl();
 
-  // Check if API endpoint is configured
-  if (!API_ENDPOINT || API_ENDPOINT === 'https://your-backend-api.com/api/ai-meal-estimate') {
+  // Check if Supabase is configured
+  if (!edgeFunctionUrl) {
     throw new Error(
-      'Backend API endpoint not configured. Please set up your backend API or enable mock mode for testing. See utils/aiMealEstimator.ts for instructions.'
+      '⚠️ Supabase not configured!\n\n' +
+      'To use the AI Meal Estimator:\n' +
+      '1. Enable Supabase in Natively\n' +
+      '2. Get a free Hugging Face API token\n' +
+      '3. Deploy the Edge Function\n' +
+      '4. Update SUPABASE_URL and SUPABASE_ANON_KEY in utils/aiMealEstimator.ts\n\n' +
+      'See the comments in utils/aiMealEstimator.ts for detailed instructions.'
     );
   }
 
@@ -217,12 +110,13 @@ export async function estimateMealWithAI(
       requestBody.optionalPhotoInfo = base64Image;
     }
 
-    // Call backend API
-    console.log('[AI Estimator] Calling backend API...');
-    const response = await fetch(API_ENDPOINT, {
+    // Call Supabase Edge Function
+    console.log('[AI Estimator] Calling Supabase Edge Function...');
+    const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -235,6 +129,8 @@ export async function estimateMealWithAI(
         throw new Error('AI estimation is temporarily unavailable. Please try again or log manually.');
       } else if (response.status === 429) {
         throw new Error('Too many requests. Please wait a moment and try again.');
+      } else if (response.status === 401) {
+        throw new Error('Authentication failed. Please check your Supabase configuration.');
       } else {
         throw new Error('AI estimation failed. Please try again or log manually.');
       }
@@ -267,6 +163,7 @@ export async function estimateMealWithAI(
 
     console.log('[AI Estimator] Estimation successful');
     console.log('[AI Estimator] Items:', data.items.length);
+    console.log('[AI Estimator] AI Model:', data.aiModel || 'Unknown');
     
     return data as EstimationResult;
   } catch (error: any) {

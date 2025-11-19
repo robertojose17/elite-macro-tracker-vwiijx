@@ -42,6 +42,7 @@ interface EstimationResult {
     fats_g: number;
     fiber_g: number;
   };
+  aiModel?: string;
 }
 
 export default function AIMealEstimatorScreen() {
@@ -240,6 +241,9 @@ export default function AIMealEstimatorScreen() {
               <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
                 Describe your meal
               </Text>
+              <Text style={[styles.helperText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Be specific! Include exclusions like &quot;no rice&quot;, &quot;without cheese&quot;, or portion modifiers like &quot;extra chicken&quot;, &quot;double meat&quot;.
+              </Text>
               <TextInput
                 style={[
                   styles.textArea,
@@ -249,7 +253,7 @@ export default function AIMealEstimatorScreen() {
                     borderColor: isDark ? colors.borderDark : colors.border,
                   },
                 ]}
-                placeholder="E.g., 'Two scrambled eggs, a slice of whole wheat toast with butter, and a medium banana'"
+                placeholder="E.g., 'Chipotle chicken bowl, no rice, extra chicken, black beans, cheese, lettuce, mild salsa'"
                 placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 value={description}
                 onChangeText={setDescription}
@@ -326,7 +330,7 @@ export default function AIMealEstimatorScreen() {
               {isEstimating ? (
                 <React.Fragment>
                   <ActivityIndicator size="small" color="#FFFFFF" />
-                  <Text style={styles.estimateButtonText}>Analyzing...</Text>
+                  <Text style={styles.estimateButtonText}>Analyzing with AI...</Text>
                 </React.Fragment>
               ) : (
                 <React.Fragment>
@@ -367,9 +371,22 @@ export default function AIMealEstimatorScreen() {
         {estimationResult && (
           <React.Fragment>
             <View style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-              <Text style={[styles.resultTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                AI Analysis
-              </Text>
+              <View style={styles.resultHeader}>
+                <IconSymbol
+                  ios_icon_name="sparkles"
+                  android_material_icon_name="auto_awesome"
+                  size={24}
+                  color={colors.primary}
+                />
+                <Text style={[styles.resultTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                  AI Analysis
+                </Text>
+              </View>
+              {estimationResult.aiModel && (
+                <Text style={[styles.aiModel, { color: colors.primary }]}>
+                  Model: {estimationResult.aiModel}
+                </Text>
+              )}
               <Text style={[styles.assumptions, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {estimationResult.assumptions}
               </Text>
@@ -565,7 +582,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.bodyBold,
+    marginBottom: spacing.xs,
+  },
+  helperText: {
+    ...typography.small,
     marginBottom: spacing.sm,
+    lineHeight: 18,
   },
   textArea: {
     borderRadius: borderRadius.md,
@@ -641,6 +663,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     textAlign: 'center',
     marginBottom: spacing.lg,
+    lineHeight: 22,
   },
   retryButton: {
     paddingHorizontal: spacing.lg,
@@ -656,8 +679,18 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.lg,
   },
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
   resultTitle: {
     ...typography.bodyBold,
+  },
+  aiModel: {
+    ...typography.small,
+    fontWeight: '600',
     marginBottom: spacing.sm,
   },
   assumptions: {
