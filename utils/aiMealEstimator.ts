@@ -2,12 +2,12 @@
 /**
  * AI Meal Estimator Utility
  * 
- * This utility calls OpenAI's API directly to estimate nutritional information
+ * This utility calls a backend API endpoint to estimate nutritional information
  * from a meal description and optional photo.
+ * 
+ * The backend can use any LLM provider (Hugging Face, OpenAI, etc.)
+ * without exposing API keys to the mobile app.
  */
-
-const OPENAI_API_KEY = 'YOUR_OPENAI_API_KEY_HERE'; // User needs to replace this
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 interface EstimatedItem {
   name: string;
@@ -31,29 +31,129 @@ interface EstimationResult {
   };
 }
 
-const SYSTEM_PROMPT = `You are a nutrition assistant. The user will describe a meal. Infer portions if missing, estimate calories and macros, and break the meal into separate ingredients. ALWAYS return ONLY valid JSON:
+// IMPORTANT: Replace this with your actual backend API endpoint
+// Options:
+// 1. Supabase Edge Function: https://your-project.supabase.co/functions/v1/ai-meal-estimate
+// 2. Your own backend server: https://your-api.com/api/ai-meal-estimate
+// 3. For development/testing: Use the mock endpoint below
+const API_ENDPOINT = 'https://your-backend-api.com/api/ai-meal-estimate';
 
-{
-  "assumptions": "short explanation",
-  "items": [
-    {
-      "name": "item name",
-      "serving_description": "portion size",
-      "calories": number,
-      "protein_g": number,
-      "carbs_g": number,
-      "fats_g": number,
-      "fiber_g": number
-    }
-  ],
-  "totals": {
-    "calories": number,
-    "protein_g": number,
-    "carbs_g": number,
-    "fats_g": number,
-    "fiber_g": number
+// Set this to true to use mock data for testing (no backend required)
+const USE_MOCK_DATA = true;
+
+/**
+ * Mock estimation for testing without a backend
+ */
+function getMockEstimation(description: string): EstimationResult {
+  console.log('[AI Estimator] Using mock data for testing');
+  
+  // Simple mock based on common keywords
+  const items: EstimatedItem[] = [];
+  const lowerDesc = description.toLowerCase();
+  
+  if (lowerDesc.includes('egg')) {
+    items.push({
+      name: 'Scrambled Eggs',
+      serving_description: '2 large eggs',
+      calories: 140,
+      protein_g: 12,
+      carbs_g: 2,
+      fats_g: 10,
+      fiber_g: 0,
+    });
   }
-}`;
+  
+  if (lowerDesc.includes('toast') || lowerDesc.includes('bread')) {
+    items.push({
+      name: 'Whole Wheat Toast',
+      serving_description: '1 slice',
+      calories: 80,
+      protein_g: 4,
+      carbs_g: 14,
+      fats_g: 1,
+      fiber_g: 2,
+    });
+  }
+  
+  if (lowerDesc.includes('banana')) {
+    items.push({
+      name: 'Banana',
+      serving_description: '1 medium',
+      calories: 105,
+      protein_g: 1,
+      carbs_g: 27,
+      fats_g: 0,
+      fiber_g: 3,
+    });
+  }
+  
+  if (lowerDesc.includes('chicken')) {
+    items.push({
+      name: 'Grilled Chicken Breast',
+      serving_description: '4 oz',
+      calories: 185,
+      protein_g: 35,
+      carbs_g: 0,
+      fats_g: 4,
+      fiber_g: 0,
+    });
+  }
+  
+  if (lowerDesc.includes('rice')) {
+    items.push({
+      name: 'White Rice',
+      serving_description: '1 cup cooked',
+      calories: 205,
+      protein_g: 4,
+      carbs_g: 45,
+      fats_g: 0,
+      fiber_g: 1,
+    });
+  }
+  
+  if (lowerDesc.includes('salad')) {
+    items.push({
+      name: 'Mixed Green Salad',
+      serving_description: '2 cups',
+      calories: 20,
+      protein_g: 2,
+      carbs_g: 4,
+      fats_g: 0,
+      fiber_g: 2,
+    });
+  }
+  
+  // If no items matched, provide a generic meal
+  if (items.length === 0) {
+    items.push({
+      name: 'Mixed Meal',
+      serving_description: '1 serving',
+      calories: 400,
+      protein_g: 20,
+      carbs_g: 45,
+      fats_g: 15,
+      fiber_g: 5,
+    });
+  }
+  
+  // Calculate totals
+  const totals = items.reduce(
+    (acc, item) => ({
+      calories: acc.calories + item.calories,
+      protein_g: acc.protein_g + item.protein_g,
+      carbs_g: acc.carbs_g + item.carbs_g,
+      fats_g: acc.fats_g + item.fats_g,
+      fiber_g: acc.fiber_g + item.fiber_g,
+    }),
+    { calories: 0, protein_g: 0, carbs_g: 0, fats_g: 0, fiber_g: 0 }
+  );
+  
+  return {
+    assumptions: 'Mock estimation based on common food keywords. For accurate results, please configure a backend API endpoint.',
+    items,
+    totals,
+  };
+}
 
 /**
  * Convert image URI to base64 data URL
@@ -79,7 +179,7 @@ async function imageUriToBase64(uri: string): Promise<string> {
 }
 
 /**
- * Estimate meal nutrition using OpenAI API
+ * Estimate meal nutrition using backend API
  */
 export async function estimateMealWithAI(
   description: string,
@@ -89,102 +189,68 @@ export async function estimateMealWithAI(
   console.log('[AI Estimator] Description:', description);
   console.log('[AI Estimator] Has image:', !!imageUri);
 
-  // Check if API key is configured
-  if (!OPENAI_API_KEY || OPENAI_API_KEY === 'YOUR_OPENAI_API_KEY_HERE') {
+  // Use mock data if enabled (for testing without backend)
+  if (USE_MOCK_DATA) {
+    console.log('[AI Estimator] Mock mode enabled - returning test data');
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return getMockEstimation(description);
+  }
+
+  // Check if API endpoint is configured
+  if (!API_ENDPOINT || API_ENDPOINT === 'https://your-backend-api.com/api/ai-meal-estimate') {
     throw new Error(
-      'OpenAI API key not configured. Please add your API key in utils/aiMealEstimator.ts'
+      'Backend API endpoint not configured. Please set up your backend API or enable mock mode for testing. See utils/aiMealEstimator.ts for instructions.'
     );
   }
 
   try {
-    // Build the user message content
-    const userContent: any[] = [
-      {
-        type: 'text',
-        text: description,
-      },
-    ];
+    // Prepare request body
+    const requestBody: any = {
+      userDescription: description,
+    };
 
     // Add image if provided
     if (imageUri) {
       console.log('[AI Estimator] Converting image to base64...');
       const base64Image = await imageUriToBase64(imageUri);
-      userContent.push({
-        type: 'image_url',
-        image_url: {
-          url: base64Image,
-        },
-      });
+      requestBody.optionalPhotoInfo = base64Image;
     }
 
-    // Call OpenAI API
-    console.log('[AI Estimator] Calling OpenAI API...');
-    const response = await fetch(OPENAI_API_URL, {
+    // Call backend API
+    console.log('[AI Estimator] Calling backend API...');
+    const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // Vision-capable and cost-effective
-        messages: [
-          {
-            role: 'system',
-            content: SYSTEM_PROMPT,
-          },
-          {
-            role: 'user',
-            content: userContent,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 1500,
-        response_format: { type: 'json_object' },
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[AI Estimator] API error:', errorText);
       
-      if (response.status === 401) {
-        throw new Error('Invalid API key. Please check your OpenAI API key.');
+      if (response.status === 503 || response.status === 500) {
+        throw new Error('AI estimation is temporarily unavailable. Please try again or log manually.');
       } else if (response.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again later.');
+        throw new Error('Too many requests. Please wait a moment and try again.');
       } else {
-        throw new Error(`API error: ${response.status} - ${errorText}`);
+        throw new Error('AI estimation failed. Please try again or log manually.');
       }
     }
 
     const data = await response.json();
     console.log('[AI Estimator] API response received');
 
-    // Extract the completion text
-    const completionText = data.choices?.[0]?.message?.content;
-    if (!completionText) {
-      throw new Error('Empty response from AI');
-    }
-
-    console.log('[AI Estimator] Parsing JSON response...');
-    
-    // Parse the JSON response
-    let result: EstimationResult;
-    try {
-      result = JSON.parse(completionText);
-    } catch (parseError) {
-      console.error('[AI Estimator] JSON parse error:', parseError);
-      console.error('[AI Estimator] Raw response:', completionText);
-      throw new Error('Invalid JSON response from AI. Please try again.');
-    }
-
     // Validate the response structure
-    if (!result.assumptions || !result.items || !Array.isArray(result.items) || !result.totals) {
-      console.error('[AI Estimator] Invalid response structure:', result);
-      throw new Error('Invalid response structure from AI. Please try again.');
+    if (!data.assumptions || !data.items || !Array.isArray(data.items) || !data.totals) {
+      console.error('[AI Estimator] Invalid response structure:', data);
+      throw new Error('Invalid response from AI service. Please try again.');
     }
 
     // Validate each item
-    for (const item of result.items) {
+    for (const item of data.items) {
       if (
         !item.name ||
         !item.serving_description ||
@@ -195,14 +261,14 @@ export async function estimateMealWithAI(
         typeof item.fiber_g !== 'number'
       ) {
         console.error('[AI Estimator] Invalid item structure:', item);
-        throw new Error('Invalid item data from AI. Please try again.');
+        throw new Error('Invalid item data from AI service. Please try again.');
       }
     }
 
     console.log('[AI Estimator] Estimation successful');
-    console.log('[AI Estimator] Items:', result.items.length);
+    console.log('[AI Estimator] Items:', data.items.length);
     
-    return result;
+    return data as EstimationResult;
   } catch (error: any) {
     console.error('[AI Estimator] Error:', error);
     
@@ -210,6 +276,6 @@ export async function estimateMealWithAI(
       throw error;
     }
     
-    throw new Error('Failed to estimate meal. Please check your internet connection and try again.');
+    throw new Error('AI estimation is temporarily unavailable. Please try again or log manually.');
   }
 }

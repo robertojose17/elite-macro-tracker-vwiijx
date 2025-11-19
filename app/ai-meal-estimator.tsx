@@ -130,7 +130,7 @@ export default function AIMealEstimatorScreen() {
       setEditedItems(result.items);
     } catch (err: any) {
       console.error('[AI Estimator] Error:', err);
-      setError(err.message || 'Failed to estimate meal. Please try again.');
+      setError(err.message || 'AI estimation is temporarily unavailable. Please try again or log manually.');
     } finally {
       setIsEstimating(false);
     }
