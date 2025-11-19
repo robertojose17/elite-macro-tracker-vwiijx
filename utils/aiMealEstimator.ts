@@ -3,15 +3,17 @@
  * AI Meal Estimator Utility
  * 
  * This utility calls a Supabase Edge Function to estimate nutritional information
- * from a meal description and optional photo using a free AI provider (Hugging Face).
+ * from a meal description and optional photo using OpenAI's GPT-4o-mini model.
  * 
  * Setup Instructions:
- * 1. Enable Supabase in Natively
- * 2. Get a free Hugging Face API token from https://huggingface.co/settings/tokens
- * 3. Deploy the Edge Function (code provided separately)
- * 4. Set your Hugging Face token: supabase secrets set HUGGINGFACE_API_KEY=your_token_here
- * 5. Update SUPABASE_URL and SUPABASE_ANON_KEY below with your project details
+ * 1. Get an OpenAI API key from https://platform.openai.com/api-keys
+ * 2. Set your OpenAI API key in Supabase secrets:
+ *    Run: supabase secrets set OPENAI_API_KEY=your_key_here
+ *    Or set it in the Supabase Dashboard under Project Settings > Edge Functions > Secrets
+ * 3. The Edge Function 'ai-meal-estimate' has been deployed and is ready to use
  */
+
+import { supabase } from '@/app/integrations/supabase/client';
 
 interface EstimatedItem {
   name: string;
@@ -35,18 +37,6 @@ interface EstimationResult {
   };
   aiModel?: string;
 }
-
-// TODO: Replace these with your Supabase project details after enabling Supabase
-const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // e.g., 'https://xxxxx.supabase.co'
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
-
-// Edge Function endpoint
-const getEdgeFunctionUrl = () => {
-  if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-    return null;
-  }
-  return `${SUPABASE_URL}/functions/v1/ai-meal-estimate`;
-};
 
 /**
  * Convert image URI to base64 data URL
@@ -72,7 +62,7 @@ async function imageUriToBase64(uri: string): Promise<string> {
 }
 
 /**
- * Estimate meal nutrition using Supabase Edge Function with free AI provider
+ * Estimate meal nutrition using Supabase Edge Function with OpenAI
  */
 export async function estimateMealWithAI(
   description: string,
@@ -81,21 +71,6 @@ export async function estimateMealWithAI(
   console.log('[AI Estimator] Starting estimation...');
   console.log('[AI Estimator] Description:', description);
   console.log('[AI Estimator] Has image:', !!imageUri);
-
-  const edgeFunctionUrl = getEdgeFunctionUrl();
-
-  // Check if Supabase is configured
-  if (!edgeFunctionUrl) {
-    throw new Error(
-      '⚠️ Supabase not configured!\n\n' +
-      'To use the AI Meal Estimator:\n' +
-      '1. Enable Supabase in Natively\n' +
-      '2. Get a free Hugging Face API token\n' +
-      '3. Deploy the Edge Function\n' +
-      '4. Update SUPABASE_URL and SUPABASE_ANON_KEY in utils/aiMealEstimator.ts\n\n' +
-      'See the comments in utils/aiMealEstimator.ts for detailed instructions.'
-    );
-  }
 
   try {
     // Prepare request body
@@ -112,31 +87,35 @@ export async function estimateMealWithAI(
 
     // Call Supabase Edge Function
     console.log('[AI Estimator] Calling Supabase Edge Function...');
-    const response = await fetch(edgeFunctionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
+    const { data, error } = await supabase.functions.invoke('ai-meal-estimate', {
+      body: requestBody,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[AI Estimator] API error:', errorText);
+    if (error) {
+      console.error('[AI Estimator] Edge Function error:', error);
       
-      if (response.status === 503 || response.status === 500) {
-        throw new Error('AI estimation is temporarily unavailable. Please try again or log manually.');
-      } else if (response.status === 429) {
-        throw new Error('Too many requests. Please wait a moment and try again.');
-      } else if (response.status === 401) {
-        throw new Error('Authentication failed. Please check your Supabase configuration.');
-      } else {
-        throw new Error('AI estimation failed. Please try again or log manually.');
+      // Handle specific error cases
+      if (error.message?.includes('not configured')) {
+        throw new Error(
+          '⚠️ OpenAI API key not configured!\n\n' +
+          'To use the AI Meal Estimator:\n' +
+          '1. Get an OpenAI API key from https://platform.openai.com/api-keys\n' +
+          '2. Set it in Supabase: supabase secrets set OPENAI_API_KEY=your_key\n' +
+          '3. Or set it in Supabase Dashboard > Project Settings > Edge Functions > Secrets'
+        );
       }
+      
+      if (error.message?.includes('Rate limit')) {
+        throw new Error('Too many requests. Please wait a moment and try again.');
+      }
+      
+      throw new Error(error.message || 'AI estimation failed. Please try again or log manually.');
     }
 
-    const data = await response.json();
+    if (!data) {
+      throw new Error('No response from AI service. Please try again.');
+    }
+
     console.log('[AI Estimator] API response received');
 
     // Validate the response structure
