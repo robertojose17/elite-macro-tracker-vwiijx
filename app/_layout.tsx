@@ -1,4 +1,5 @@
 
+
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
@@ -131,6 +132,30 @@ export default function RootLayout() {
               
               <Stack.Screen
                 name="add-food"
+                options={{
+                  headerShown: false,
+                  presentation: "modal",
+                }}
+              />
+              
+              <Stack.Screen
+                name="barcode-scanner"
+                options={{
+                  headerShown: false,
+                  presentation: "fullScreenModal",
+                }}
+              />
+              
+              <Stack.Screen
+                name="food-detail"
+                options={{
+                  headerShown: false,
+                  presentation: "modal",
+                }}
+              />
+              
+              <Stack.Screen
+                name="create-food"
                 options={{
                   headerShown: false,
                   presentation: "modal",

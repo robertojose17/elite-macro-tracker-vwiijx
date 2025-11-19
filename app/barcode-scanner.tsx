@@ -1,11 +1,17 @@
 
+
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { colors } from "@/styles/commonStyles";
 
 export default function BarcodeScannerScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const mealType = params.mealType as string || 'breakfast';
+  const date = params.date as string || new Date().toISOString().split('T')[0];
+  
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [scannedBarcode, setScannedBarcode] = useState("");
@@ -41,6 +47,18 @@ export default function BarcodeScannerScreen() {
     console.log("✅ Barcode detected!");
     console.log("Type:", type);
     console.log("Data:", data);
+    
+    // Navigate to create-food with the barcode
+    setTimeout(() => {
+      router.replace({
+        pathname: '/create-food',
+        params: {
+          barcode: data,
+          mealType: mealType,
+          date: date
+        }
+      });
+    }, 500);
   };
 
   return (
@@ -80,6 +98,9 @@ export default function BarcodeScannerScreen() {
 
         <View style={styles.scanArea}>
           <View style={styles.scanFrame} />
+          <Text style={styles.instructionText}>
+            Point camera at barcode
+          </Text>
         </View>
 
         <View style={styles.bottomSection}>
@@ -146,6 +167,13 @@ const styles = StyleSheet.create({
     borderColor: "#fff",
     borderRadius: 12,
     backgroundColor: "transparent",
+  },
+  instructionText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginTop: 20,
+    textAlign: "center",
   },
   bottomSection: {
     paddingBottom: 120,
