@@ -91,18 +91,40 @@ export async function estimateMealWithAI(
       body: requestBody,
     });
 
+    console.log('[AI Estimator] Response received');
+    console.log('[AI Estimator] Error:', error);
+    console.log('[AI Estimator] Data:', data);
+
     if (error) {
       console.error('[AI Estimator] Edge Function error:', error);
       
+      // Parse error message from response
+      let errorMessage = error.message || 'Unknown error';
+      
+      // Try to extract error from context if available
+      if (error.context) {
+        try {
+          const contextData = typeof error.context === 'string' 
+            ? JSON.parse(error.context) 
+            : error.context;
+          
+          if (contextData.error) {
+            errorMessage = contextData.error;
+          }
+        } catch (e) {
+          console.error('[AI Estimator] Failed to parse error context:', e);
+        }
+      }
+      
       // Handle specific error cases
-      if (error.message?.includes('not configured')) {
+      if (errorMessage.includes('not configured') || errorMessage.includes('API key')) {
         throw new Error(
           '⚠️ AI service not configured!\n\n' +
-          'Please contact support if this issue persists.'
+          'The Hugging Face API key may be missing or invalid. Please contact support.'
         );
       }
       
-      if (error.message?.includes('Model is loading') || error.message?.includes('503')) {
+      if (errorMessage.includes('Model is loading') || errorMessage.includes('503')) {
         throw new Error(
           '🔄 AI model is warming up...\n\n' +
           'The Hugging Face model needs 10-20 seconds to start. Please wait a moment and try again.\n\n' +
@@ -110,19 +132,27 @@ export async function estimateMealWithAI(
         );
       }
       
-      if (error.message?.includes('Rate limit') || error.message?.includes('429')) {
+      if (errorMessage.includes('Rate limit') || errorMessage.includes('429')) {
         throw new Error('⏱️ Too many requests. Please wait a moment and try again.');
       }
       
-      if (error.message?.includes('timeout') || error.message?.includes('504')) {
+      if (errorMessage.includes('timeout') || errorMessage.includes('504')) {
         throw new Error(
           '⏱️ Request timeout.\n\n' +
           'The AI model is taking too long to respond. This can happen when the model is cold-starting.\n\n' +
           'Please try again in a few seconds.'
         );
       }
+
+      if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway')) {
+        throw new Error(
+          '🔧 Service temporarily unavailable.\n\n' +
+          'The AI service encountered an error. This usually resolves itself.\n\n' +
+          'Please try again in a moment.'
+        );
+      }
       
-      throw new Error(error.message || 'AI estimation failed. Please try again or log manually.');
+      throw new Error(errorMessage || 'AI estimation failed. Please try again or log manually.');
     }
 
     if (!data) {
