@@ -97,9 +97,11 @@ export async function estimateMealWithAI(
 
     if (error) {
       console.error('[AI Estimator] Edge Function error:', error);
+      console.error('[AI Estimator] Error details:', JSON.stringify(error, null, 2));
       
       // Parse error message from response
       let errorMessage = error.message || 'Unknown error';
+      let errorDetail = '';
       
       // Try to extract error from context if available
       if (error.context) {
@@ -108,13 +110,21 @@ export async function estimateMealWithAI(
             ? JSON.parse(error.context) 
             : error.context;
           
+          console.error('[AI Estimator] Error context:', contextData);
+          
           if (contextData.error) {
             errorMessage = contextData.error;
+          }
+          if (contextData.detail) {
+            errorDetail = contextData.detail;
           }
         } catch (e) {
           console.error('[AI Estimator] Failed to parse error context:', e);
         }
       }
+      
+      console.error('[AI Estimator] Parsed error message:', errorMessage);
+      console.error('[AI Estimator] Parsed error detail:', errorDetail);
       
       // Handle specific error cases
       if (errorMessage.includes('not configured') || errorMessage.includes('API key')) {
@@ -144,15 +154,16 @@ export async function estimateMealWithAI(
         );
       }
 
-      if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway')) {
+      if (errorMessage.includes('502') || errorMessage.includes('Bad Gateway') || errorMessage.includes('Failed to connect')) {
         throw new Error(
           '🔧 Service temporarily unavailable.\n\n' +
           'The AI service encountered an error. This usually resolves itself.\n\n' +
-          'Please try again in a moment.'
+          'Please try again in a moment.\n\n' +
+          (errorDetail ? `Details: ${errorDetail}` : '')
         );
       }
       
-      throw new Error(errorMessage || 'AI estimation failed. Please try again or log manually.');
+      throw new Error(errorMessage + (errorDetail ? `\n\nDetails: ${errorDetail}` : '') || 'AI estimation failed. Please try again or log manually.');
     }
 
     if (!data) {
