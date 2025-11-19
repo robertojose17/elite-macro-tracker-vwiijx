@@ -1,7 +1,8 @@
+
 {
   "expo": {
     "name": "Elite Macro Tracker",
-    "slug": "Elite Macro Tracker",
+    "slug": "elite-macro-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -14,7 +15,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.elitemacrotracker.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -25,7 +26,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.elitemacrotracker.app"
     },
     "web": {
       "favicon": "./assets/images/final_quest_240x240.png",
@@ -42,13 +43,12 @@
         }
       ]
     ],
-    "scheme": "natively",
+    "scheme": "elitemacrotracker",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {}
     }
-  },
-  "scheme": "Elite Macro Tracker"
+  }
 }
