@@ -15,6 +15,7 @@ export default function ProfileScreen() {
 
   const [user, setUser] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadUserData();
@@ -22,26 +23,54 @@ export default function ProfileScreen() {
 
   const loadUserData = async () => {
     try {
+      setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) return;
+      if (!authUser) {
+        console.log('No authenticated user found');
+        setLoading(false);
+        return;
+      }
 
-      const { data: userData } = await supabase
+      console.log('Loading profile for user:', authUser.id);
+
+      // Use maybeSingle() instead of single() to handle 0 rows gracefully
+      const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
         .eq('id', authUser.id)
-        .single();
+        .maybeSingle();
 
-      const { data: goalData } = await supabase
+      if (userError) {
+        console.error('Error loading user data:', userError);
+      } else if (userData) {
+        console.log('User data loaded:', userData);
+        setUser({ ...authUser, ...userData });
+      } else {
+        console.log('No user data found in database');
+        setUser(authUser);
+      }
+
+      // Use maybeSingle() to handle case where no goal exists yet
+      const { data: goalData, error: goalError } = await supabase
         .from('goals')
         .select('*')
         .eq('user_id', authUser.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      setUser({ ...authUser, ...userData });
-      setGoal(goalData);
+      if (goalError) {
+        console.error('Error loading goal:', goalError);
+      } else if (goalData) {
+        console.log('Goal data loaded:', goalData);
+        setGoal(goalData);
+      } else {
+        console.log('No active goal found for user');
+        setGoal(null);
+      }
     } catch (error) {
-      console.error('Error loading user data:', error);
+      console.error('Error in loadUserData:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -99,13 +128,31 @@ export default function ProfileScreen() {
     return age;
   };
 
-  if (!user) {
+  if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
             Loading profile...
           </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            No user data available
+          </Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={() => router.replace('/auth/welcome')}
+          >
+            <Text style={styles.buttonText}>Go to Login</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -141,26 +188,34 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {user.height && user.current_weight && (
+        {(user.height || user.current_weight) && (
           <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
               Your Stats
             </Text>
             
             <View style={styles.statsGrid}>
-              <StatItem label="Height" value={`${user.height} cm`} isDark={isDark} />
-              <StatItem label="Weight" value={`${user.current_weight} kg`} isDark={isDark} />
+              {user.height && (
+                <StatItem label="Height" value={`${Math.round(user.height)} cm`} isDark={isDark} />
+              )}
+              {user.current_weight && (
+                <StatItem label="Weight" value={`${Math.round(user.current_weight)} kg`} isDark={isDark} />
+              )}
               {user.date_of_birth && (
                 <StatItem label="Age" value={`${calculateAge(user.date_of_birth)} years`} isDark={isDark} />
               )}
               {user.sex && (
-                <StatItem label="Sex" value={user.sex === 'male' ? 'Male' : 'Female'} isDark={isDark} />
+                <StatItem 
+                  label="Sex" 
+                  value={user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : 'Other'} 
+                  isDark={isDark} 
+                />
               )}
             </View>
           </View>
         )}
 
-        {goal && (
+        {goal ? (
           <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
               Current Goals
@@ -200,6 +255,21 @@ export default function ProfileScreen() {
               <Text style={styles.editButtonText}>Edit Goals</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              No Goals Set
+            </Text>
+            <Text style={[styles.noGoalText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Complete onboarding to set your nutrition goals
+            </Text>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/onboarding/personal-info')}
+            >
+              <Text style={styles.editButtonText}>Set Up Goals</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
@@ -223,7 +293,7 @@ export default function ProfileScreen() {
           <SettingItem
             icon="language"
             label="Units"
-            value="Metric"
+            value={user.preferred_units === 'imperial' ? 'Imperial' : 'Metric'}
             onPress={() => console.log('Units')}
             isDark={isDark}
           />
@@ -320,9 +390,19 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
   },
   loadingText: {
     ...typography.body,
+  },
+  button: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   header: {
     paddingHorizontal: spacing.md,
@@ -415,6 +495,11 @@ const styles = StyleSheet.create({
   },
   goalValue: {
     ...typography.bodyBold,
+  },
+  noGoalText: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.md,
   },
   editButton: {
     borderRadius: borderRadius.md,

@@ -51,6 +51,40 @@ export default function ResultsScreen() {
       }
 
       const onboardingData: OnboardingData = JSON.parse(data);
+      console.log('Saving onboarding data:', onboardingData);
+
+      // Calculate age from date of birth if we have age
+      let dateOfBirth = null;
+      if (onboardingData.age) {
+        const currentYear = new Date().getFullYear();
+        const birthYear = currentYear - onboardingData.age;
+        dateOfBirth = `${birthYear}-01-01`;
+      }
+
+      // Update user profile with all onboarding data
+      const { error: userUpdateError } = await supabase
+        .from('users')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          sex: onboardingData.sex,
+          date_of_birth: dateOfBirth,
+          height: onboardingData.height, // Already in cm
+          current_weight: onboardingData.weight, // Already in kg
+          activity_level: onboardingData.activity_level,
+          preferred_units: onboardingData.preferred_units || 'metric',
+          onboarding_completed: true,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'id'
+        });
+
+      if (userUpdateError) {
+        console.error('User update error:', userUpdateError);
+        throw userUpdateError;
+      }
+
+      console.log('User profile updated successfully');
 
       // Deactivate any existing goals
       await supabase
@@ -66,6 +100,7 @@ export default function ResultsScreen() {
           user_id: user.id,
           goal_type: onboardingData.goal_type || 'maintain',
           goal_intensity: onboardingData.goal_intensity || 1,
+          target_weight: onboardingData.target_weight,
           daily_calories: results.daily_calories,
           protein_g: results.protein_g,
           carbs_g: results.carbs_g,
@@ -76,21 +111,20 @@ export default function ResultsScreen() {
 
       if (goalError) {
         console.error('Goal creation error:', goalError);
+        throw goalError;
       }
 
-      // Mark onboarding as complete
-      await supabase
-        .from('users')
-        .update({ onboarding_completed: true })
-        .eq('id', user.id);
+      console.log('Goal created successfully');
 
       // Clear onboarding data
       await AsyncStorage.removeItem('onboarding_data');
       await AsyncStorage.setItem('onboarding_complete', 'true');
 
+      console.log('Onboarding complete, navigating to home');
       router.replace('/(tabs)/(home)/');
     } catch (error) {
       console.error('Error saving goal:', error);
+      alert('Failed to save your goals. Please try again.');
     } finally {
       setSaving(false);
     }

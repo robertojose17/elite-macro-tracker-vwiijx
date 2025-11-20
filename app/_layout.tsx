@@ -82,28 +82,29 @@ export default function RootLayout() {
       try {
         console.log('Checking onboarding status for user:', session.user.id);
         
+        // Use maybeSingle() to handle 0 rows gracefully
         const { data: userData, error } = await supabase
           .from('users')
           .select('onboarding_completed')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error('Error checking onboarding status:', error);
-          
-          // If user doesn't exist in users table, redirect to onboarding
-          if (error.code === 'PGRST116') {
-            console.log('User not found in database, redirecting to onboarding');
-            router.replace('/onboarding/personal-info');
-          } else {
-            // For other errors, show a friendly message but don't block
-            console.log('Database error, redirecting to onboarding to be safe');
-            router.replace('/onboarding/personal-info');
-          }
+          // If there's an error, redirect to onboarding to be safe
+          console.log('Error occurred, redirecting to onboarding');
+          router.replace('/onboarding/personal-info');
           return;
         }
 
-        if (userData?.onboarding_completed) {
+        if (!userData) {
+          // User doesn't exist in database yet, redirect to onboarding
+          console.log('User not found in database, redirecting to onboarding');
+          router.replace('/onboarding/personal-info');
+          return;
+        }
+
+        if (userData.onboarding_completed) {
           console.log('Onboarding completed, redirecting to home');
           router.replace('/(tabs)/(home)/');
         } else {
