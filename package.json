@@ -1,3 +1,4 @@
+
 {
   "name": "Natively",
   "version": "1.0.0",
@@ -28,7 +29,6 @@
     "difflib": "^0.2.4",
     "eas": "^0.1.0",
     "expo": "~54.0.1",
-    "expo-barcode-scanner": "^13.0.1",
     "expo-blur": "^15.0.6",
     "expo-camera": "^17.0.9",
     "expo-constants": "~18.0.8",
