@@ -8,7 +8,7 @@ import { GlassView } from 'expo-glass-effect';
 import { useTheme } from '@react-navigation/native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { supabase } from '@/app/integrations/supabase/client';
-import { cmToFeetInches, kgToLbs } from '@/utils/calculations';
+import { cmToFeetInches, kgToLbs, getLossRateDisplayText } from '@/utils/calculations';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -153,6 +153,18 @@ export default function ProfileScreen() {
     return `${Math.round(weightKg)} kg`;
   };
 
+  const formatGoalType = (goalType: string, lossRate?: number) => {
+    if (goalType === 'lose') {
+      if (lossRate) {
+        return `Lose Weight at ${lossRate} lb/week`;
+      }
+      return 'Lose Weight';
+    } else if (goalType === 'gain') {
+      return 'Gain Weight';
+    }
+    return 'Maintain Weight';
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
@@ -255,9 +267,20 @@ export default function ProfileScreen() {
                 Goal Type
               </Text>
               <Text style={[styles.goalValue, { color: theme.colors.text }]}>
-                {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
+                {formatGoalType(goal.goal_type, goal.loss_rate_lbs_per_week)}
               </Text>
             </View>
+            
+            {goal.goal_type === 'lose' && goal.loss_rate_lbs_per_week && (
+              <View style={styles.goalItem}>
+                <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
+                  Weight Loss Rate
+                </Text>
+                <Text style={[styles.goalValue, { color: theme.colors.text }]}>
+                  {getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
+                </Text>
+              </View>
+            )}
             
             <View style={styles.goalItem}>
               <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
@@ -474,6 +497,8 @@ const styles = StyleSheet.create({
   goalValue: {
     fontSize: 14,
     fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
   },
   noGoalText: {
     fontSize: 14,

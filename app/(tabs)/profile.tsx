@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
-import { cmToFeetInches, kgToLbs } from '@/utils/calculations';
+import { cmToFeetInches, kgToLbs, getLossRateDisplayText } from '@/utils/calculations';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -152,6 +152,18 @@ export default function ProfileScreen() {
     return `${Math.round(weightKg)} kg`;
   };
 
+  const formatGoalType = (goalType: string, lossRate?: number) => {
+    if (goalType === 'lose') {
+      if (lossRate) {
+        return `Lose Weight at ${lossRate} lb/week`;
+      }
+      return 'Lose Weight';
+    } else if (goalType === 'gain') {
+      return 'Gain Weight';
+    }
+    return 'Maintain Weight';
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -277,9 +289,20 @@ export default function ProfileScreen() {
                 Goal Type
               </Text>
               <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
-                {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
+                {formatGoalType(goal.goal_type, goal.loss_rate_lbs_per_week)}
               </Text>
             </View>
+            
+            {goal.goal_type === 'lose' && goal.loss_rate_lbs_per_week && (
+              <View style={styles.goalItem}>
+                <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Weight Loss Rate
+                </Text>
+                <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+                  {getLossRateDisplayText(goal.loss_rate_lbs_per_week)}
+                </Text>
+              </View>
+            )}
             
             <View style={styles.goalItem}>
               <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -462,6 +485,8 @@ const styles = StyleSheet.create({
   },
   goalValue: {
     ...typography.bodyBold,
+    flex: 1,
+    textAlign: 'right',
   },
   noGoalText: {
     ...typography.body,

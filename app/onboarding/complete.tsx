@@ -30,6 +30,9 @@ export default function CompleteOnboardingScreen() {
   // Goal
   const [goalType, setGoalType] = useState<GoalType>('lose');
   
+  // Weight Loss Rate (only for 'lose' goal)
+  const [lossRateLbsPerWeek, setLossRateLbsPerWeek] = useState<number>(1.0);
+  
   // Activity
   const [activityLevel, setActivityLevel] = useState<ActivityLevel>('moderate');
   
@@ -91,12 +94,20 @@ export default function CompleteOnboardingScreen() {
         sex,
         activityLevel,
         goalType,
+        lossRateLbsPerWeek: goalType === 'lose' ? lossRateLbsPerWeek : null,
       });
 
       // Calculate BMR and TDEE
       const bmr = calculateBMR(weightInKg, heightInCm, ageNum, sex);
       const tdee = calculateTDEE(bmr, activityLevel);
-      const targetCalories = calculateTargetCalories(tdee, goalType, 1);
+      
+      // Calculate target calories based on goal type and loss rate
+      const targetCalories = calculateTargetCalories(
+        tdee, 
+        goalType, 
+        goalType === 'lose' ? lossRateLbsPerWeek : undefined
+      );
+      
       const macros = calculateMacros(targetCalories, weightInKg, 'balanced');
 
       console.log('[Onboarding] Calculated:', {
@@ -104,6 +115,7 @@ export default function CompleteOnboardingScreen() {
         tdee,
         targetCalories,
         macros,
+        lossRateLbsPerWeek: goalType === 'lose' ? lossRateLbsPerWeek : null,
       });
 
       // Calculate date of birth
@@ -140,20 +152,27 @@ export default function CompleteOnboardingScreen() {
         .eq('user_id', user.id)
         .eq('is_active', true);
 
-      // Create new goal
+      // Create new goal with loss rate if applicable
+      const goalData: any = {
+        user_id: user.id,
+        goal_type: goalType,
+        goal_intensity: 1,
+        daily_calories: targetCalories,
+        protein_g: macros.protein,
+        carbs_g: macros.carbs,
+        fats_g: macros.fats,
+        fiber_g: macros.fiber,
+        is_active: true,
+      };
+
+      // Add loss rate only for weight loss goal
+      if (goalType === 'lose') {
+        goalData.loss_rate_lbs_per_week = lossRateLbsPerWeek;
+      }
+
       const { error: goalError } = await supabase
         .from('goals')
-        .insert({
-          user_id: user.id,
-          goal_type: goalType,
-          goal_intensity: 1,
-          daily_calories: targetCalories,
-          protein_g: macros.protein,
-          carbs_g: macros.carbs,
-          fats_g: macros.fats,
-          fiber_g: macros.fiber,
-          is_active: true,
-        });
+        .insert(goalData);
 
       if (goalError) {
         console.error('[Onboarding] Goal creation error:', goalError);
@@ -388,6 +407,49 @@ export default function CompleteOnboardingScreen() {
             </View>
           </View>
 
+          {/* Weight Loss Rate - Only show when goal is 'lose' */}
+          {goalType === 'lose' && (
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                How fast do you want to lose weight? *
+              </Text>
+              <View style={styles.activityOptions}>
+                <LossRateOption
+                  label="0.5 lb per week"
+                  description="Slow and steady"
+                  value={0.5}
+                  selected={lossRateLbsPerWeek === 0.5}
+                  onPress={() => setLossRateLbsPerWeek(0.5)}
+                  isDark={isDark}
+                />
+                <LossRateOption
+                  label="1.0 lb per week"
+                  description="Moderate"
+                  value={1.0}
+                  selected={lossRateLbsPerWeek === 1.0}
+                  onPress={() => setLossRateLbsPerWeek(1.0)}
+                  isDark={isDark}
+                />
+                <LossRateOption
+                  label="1.5 lb per week"
+                  description="Fast"
+                  value={1.5}
+                  selected={lossRateLbsPerWeek === 1.5}
+                  onPress={() => setLossRateLbsPerWeek(1.5)}
+                  isDark={isDark}
+                />
+                <LossRateOption
+                  label="2.0 lb per week"
+                  description="Very aggressive"
+                  value={2.0}
+                  selected={lossRateLbsPerWeek === 2.0}
+                  onPress={() => setLossRateLbsPerWeek(2.0)}
+                  isDark={isDark}
+                />
+              </View>
+            </View>
+          )}
+
           {/* Activity Level */}
           <View style={styles.section}>
             <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>Activity Level *</Text>
@@ -439,6 +501,31 @@ export default function CompleteOnboardingScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function LossRateOption({ label, description, value, selected, onPress, isDark }: any) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.activityOption,
+        { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border },
+        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
+      ]}
+      onPress={onPress}
+    >
+      <View style={styles.activityContent}>
+        <Text style={[styles.activityLabel, { color: isDark ? colors.textDark : colors.text }, selected && { color: '#FFFFFF' }]}>
+          {label}
+        </Text>
+        <Text style={[styles.activityDescription, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }, selected && { color: 'rgba(255,255,255,0.8)' }]}>
+          {description}
+        </Text>
+      </View>
+      <View style={[styles.radio, { borderColor: selected ? '#FFFFFF' : (isDark ? colors.borderDark : colors.border) }]}>
+        {selected && <View style={styles.radioInner} />}
+      </View>
+    </TouchableOpacity>
   );
 }
 

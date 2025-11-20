@@ -44,16 +44,41 @@ export function calculateTDEE(bmr: number, activity: ActivityLevel): number {
   return Math.round(bmr * getActivityMultiplier(activity));
 }
 
+/**
+ * Calculate daily calorie deficit based on weight loss rate
+ * @param lossRateLbsPerWeek - Desired weight loss rate in lbs per week (0.5, 1.0, 1.5, 2.0)
+ * @returns Daily calorie deficit
+ */
+export function calculateDeficitFromLossRate(lossRateLbsPerWeek: number): number {
+  // 1 lb of fat ≈ 3500 kcal
+  // Daily deficit = (lbs per week * 3500) / 7 days
+  return Math.round((lossRateLbsPerWeek * 3500) / 7);
+}
+
+/**
+ * Calculate target calories based on goal type and weight loss rate
+ * @param tdee - Total Daily Energy Expenditure
+ * @param goalType - Goal type (lose/maintain/gain)
+ * @param lossRateLbsPerWeek - Weight loss rate in lbs per week (only used for 'lose' goal)
+ * @returns Target daily calories
+ */
 export function calculateTargetCalories(
   tdee: number,
   goalType: GoalType,
-  intensity: number = 1
+  lossRateLbsPerWeek?: number
 ): number {
   if (goalType === 'lose') {
-    return Math.round(tdee - 500 * intensity);
+    if (!lossRateLbsPerWeek) {
+      // Default to 1 lb per week if not specified
+      lossRateLbsPerWeek = 1.0;
+    }
+    const deficit = calculateDeficitFromLossRate(lossRateLbsPerWeek);
+    return Math.round(tdee - deficit);
   } else if (goalType === 'gain') {
-    return Math.round(tdee + 300 * intensity);
+    // For weight gain, use a moderate surplus (not implemented yet, keeping old logic)
+    return Math.round(tdee + 300);
   }
+  // Maintain weight
   return tdee;
 }
 
@@ -197,4 +222,17 @@ export function cmToFeetInches(cm: number): { feet: number; inches: number } {
   const feet = Math.floor(totalInches / 12);
   const inches = Math.round(totalInches % 12);
   return { feet, inches };
+}
+
+/**
+ * Get display text for weight loss rate
+ */
+export function getLossRateDisplayText(lossRateLbsPerWeek: number): string {
+  const rateMap: { [key: number]: string } = {
+    0.5: '0.5 lb/week (slow and steady)',
+    1.0: '1 lb/week (moderate)',
+    1.5: '1.5 lb/week (fast)',
+    2.0: '2 lb/week (very aggressive)',
+  };
+  return rateMap[lossRateLbsPerWeek] || `${lossRateLbsPerWeek} lb/week`;
 }
