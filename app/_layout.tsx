@@ -218,6 +218,46 @@ export default function RootLayout() {
               />
               
               <Stack.Screen
+                name="add-food"
+                options={{
+                  headerShown: false,
+                  presentation: "modal",
+                }}
+              />
+              
+              <Stack.Screen
+                name="food-search"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
+              
+              <Stack.Screen
+                name="food-details"
+                options={{
+                  headerShown: false,
+                  presentation: "card",
+                }}
+              />
+              
+              <Stack.Screen
+                name="barcode-scan"
+                options={{
+                  headerShown: false,
+                  presentation: "fullScreenModal",
+                }}
+              />
+              
+              <Stack.Screen
+                name="quick-add"
+                options={{
+                  headerShown: false,
+                  presentation: "modal",
+                }}
+              />
+              
+              <Stack.Screen
                 name="publish"
                 options={{
                   headerShown: false,
