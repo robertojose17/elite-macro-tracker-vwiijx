@@ -14,6 +14,8 @@ export default function AddFoodSimpleScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
+
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
@@ -36,8 +38,6 @@ export default function AddFoodSimpleScreen() {
         setSaving(false);
         return;
       }
-
-      const today = new Date().toISOString().split('T')[0];
 
       // Create food entry
       const { data: foodData, error: foodError } = await supabase
@@ -66,12 +66,12 @@ export default function AddFoodSimpleScreen() {
 
       console.log('[AddFood] Food created:', foodData);
 
-      // Create or get meal for today
+      // Create or get meal for the date
       const { data: existingMeal } = await supabase
         .from('meals')
         .select('id')
         .eq('user_id', user.id)
-        .eq('date', today)
+        .eq('date', date)
         .eq('meal_type', 'breakfast')
         .maybeSingle();
 
@@ -82,7 +82,7 @@ export default function AddFoodSimpleScreen() {
           .from('meals')
           .insert({
             user_id: user.id,
-            date: today,
+            date: date,
             meal_type: 'breakfast',
           })
           .select()

@@ -15,6 +15,7 @@ export default function FoodSearchScreen() {
   const isDark = colorScheme === 'dark';
 
   const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
@@ -55,6 +56,7 @@ export default function FoodSearchScreen() {
       pathname: '/food-details',
       params: {
         meal: mealType,
+        date: date,
         productData: JSON.stringify(product),
       },
     });

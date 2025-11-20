@@ -16,6 +16,7 @@ export default function FoodDetailsScreen() {
   const isDark = colorScheme === 'dark';
 
   const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
   const productDataString = params.productData as string;
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
@@ -75,8 +76,6 @@ export default function FoodDetailsScreen() {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
-
       // Check if this food already exists in our database (by barcode)
       let foodId: string | null = null;
 
@@ -125,12 +124,12 @@ export default function FoodDetailsScreen() {
         console.log('[FoodDetails] Created new food:', foodId);
       }
 
-      // Create or get meal for today
+      // Create or get meal for the date
       const { data: existingMeal } = await supabase
         .from('meals')
         .select('id')
         .eq('user_id', user.id)
-        .eq('date', today)
+        .eq('date', date)
         .eq('meal_type', mealType)
         .maybeSingle();
 
@@ -141,7 +140,7 @@ export default function FoodDetailsScreen() {
           .from('meals')
           .insert({
             user_id: user.id,
-            date: today,
+            date: date,
             meal_type: mealType,
           })
           .select()

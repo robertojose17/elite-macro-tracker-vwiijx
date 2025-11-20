@@ -16,6 +16,7 @@ export default function BarcodeScanScreen() {
   const isDark = colorScheme === 'dark';
 
   const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -44,6 +45,7 @@ export default function BarcodeScanScreen() {
           pathname: '/food-details',
           params: {
             meal: mealType,
+            date: date,
             productData: JSON.stringify(product),
           },
         });
@@ -64,7 +66,7 @@ export default function BarcodeScanScreen() {
             {
               text: 'Add Manually',
               onPress: () => {
-                router.replace(`/quick-add?meal=${mealType}`);
+                router.replace(`/quick-add?meal=${mealType}&date=${date}`);
               },
             },
           ]

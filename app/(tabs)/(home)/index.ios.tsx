@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -26,12 +26,13 @@ export default function HomeScreen() {
   const [foodItems, setFoodItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
 
   useFocusEffect(
     useCallback(() => {
       console.log('[Home iOS] Screen focused, loading data');
       loadData();
-    }, [])
+    }, [selectedDate])
   );
 
   const loadData = async () => {
@@ -70,8 +71,8 @@ export default function HomeScreen() {
         });
       }
 
-      // Load today's meals and food items
-      const today = new Date().toISOString().split('T')[0];
+      // Load meals for selected date
+      const dateString = selectedDate.toISOString().split('T')[0];
       const { data: mealsData, error: mealsError } = await supabase
         .from('meals')
         .select(`
@@ -88,12 +89,13 @@ export default function HomeScreen() {
             foods (
               id,
               name,
-              brand
+              brand,
+              user_created
             )
           )
         `)
         .eq('user_id', user.id)
-        .eq('date', today);
+        .eq('date', dateString);
 
       if (mealsError) {
         console.error('[Home iOS] Error loading meals:', mealsError);
@@ -148,7 +150,77 @@ export default function HomeScreen() {
 
   const handleAddFood = () => {
     console.log('[Home iOS] Opening add food screen');
-    router.push('/add-food-simple');
+    const dateString = selectedDate.toISOString().split('T')[0];
+    router.push(`/add-food-simple?date=${dateString}`);
+  };
+
+  const handleEditFood = (item: any) => {
+    console.log('[Home iOS] Opening edit food:', item.id);
+    const dateString = selectedDate.toISOString().split('T')[0];
+    router.push({
+      pathname: '/edit-food',
+      params: {
+        itemId: item.id,
+        date: dateString,
+      },
+    });
+  };
+
+  const handleDeleteFood = (item: any) => {
+    Alert.alert(
+      'Delete Food',
+      `Are you sure you want to delete ${item.foods?.name || 'this food'}?`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('meal_items')
+                .delete()
+                .eq('id', item.id);
+
+              if (error) {
+                console.error('[Home iOS] Error deleting food:', error);
+                Alert.alert('Error', 'Failed to delete food');
+              } else {
+                console.log('[Home iOS] Food deleted successfully');
+                loadData();
+              }
+            } catch (error) {
+              console.error('[Home iOS] Error in handleDeleteFood:', error);
+              Alert.alert('Error', 'An unexpected error occurred');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const goToPreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
+
+  const isToday = () => {
+    const today = new Date();
+    return selectedDate.toDateString() === today.toDateString();
   };
 
   if (loading) {
@@ -174,16 +246,44 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Today&apos;s Progress
+        {/* Date Navigation */}
+        <View style={[styles.dateNavigation, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="chevron_left"
+              size={24}
+              color={isDark ? colors.textDark : colors.text}
+            />
+          </TouchableOpacity>
+          
+          <View style={styles.dateCenter}>
+            <Text style={[styles.dateLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {isToday() ? 'Today' : selectedDate.toLocaleDateString('en-US', { weekday: 'short' })}
             </Text>
-            <Text style={[styles.date, { color: isDark ? colors.textDark : colors.text }]}>
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            <Text style={[styles.dateText, { color: isDark ? colors.textDark : colors.text }]}>
+              {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
             </Text>
           </View>
+
+          <TouchableOpacity onPress={goToNextDay} style={styles.dateButton}>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="chevron_right"
+              size={24}
+              color={isDark ? colors.textDark : colors.text}
+            />
+          </TouchableOpacity>
         </View>
+
+        {!isToday() && (
+          <TouchableOpacity 
+            style={[styles.todayButton, { backgroundColor: colors.primary }]}
+            onPress={goToToday}
+          >
+            <Text style={styles.todayButtonText}>Go to Today</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
@@ -262,7 +362,7 @@ export default function HomeScreen() {
         <View style={[styles.foodsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={styles.foodsHeader}>
             <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Today&apos;s Foods
+              Foods
             </Text>
             <TouchableOpacity
               style={[styles.addButton, { backgroundColor: colors.primary }]}
@@ -282,7 +382,7 @@ export default function HomeScreen() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>🍽️</Text>
               <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                No foods logged yet today
+                No foods logged for this date
               </Text>
               <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Tap &quot;Add Food&quot; to start tracking
@@ -292,7 +392,11 @@ export default function HomeScreen() {
             <View style={styles.foodsList}>
               {foodItems.map((item, index) => (
                 <React.Fragment key={index}>
-                  <View style={styles.foodItem}>
+                  <TouchableOpacity 
+                    style={styles.foodItem}
+                    onPress={() => handleEditFood(item)}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.foodInfo}>
                       <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
                         {item.foods?.name || 'Unknown Food'}
@@ -306,7 +410,18 @@ export default function HomeScreen() {
                         {Math.round(item.calories)} kcal • P: {Math.round(item.protein)}g • C: {Math.round(item.carbs)}g • F: {Math.round(item.fats)}g
                       </Text>
                     </View>
-                  </View>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={() => handleDeleteFood(item)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={20}
+                        color={colors.error}
+                      />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
                 </React.Fragment>
               ))}
             </View>
@@ -347,18 +462,41 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
   },
-  header: {
+  dateNavigation: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
+    elevation: 2,
   },
-  greeting: {
+  dateButton: {
+    padding: spacing.sm,
+  },
+  dateCenter: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  dateLabel: {
     ...typography.caption,
-    marginBottom: spacing.xs,
+    marginBottom: 2,
   },
-  date: {
-    ...typography.h2,
+  dateText: {
+    ...typography.h3,
+  },
+  todayButton: {
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  todayButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   caloriesCard: {
     borderRadius: borderRadius.lg,
@@ -447,6 +585,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   foodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.05)',
@@ -464,5 +604,9 @@ const styles = StyleSheet.create({
   },
   foodMacros: {
     ...typography.caption,
+  },
+  deleteButton: {
+    padding: spacing.xs,
+    marginLeft: spacing.sm,
   },
 });

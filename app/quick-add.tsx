@@ -15,6 +15,7 @@ export default function QuickAddScreen() {
   const isDark = colorScheme === 'dark';
 
   const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
 
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
@@ -39,8 +40,6 @@ export default function QuickAddScreen() {
         setSaving(false);
         return;
       }
-
-      const today = new Date().toISOString().split('T')[0];
 
       // Create food entry
       const { data: foodData, error: foodError } = await supabase
@@ -69,12 +68,12 @@ export default function QuickAddScreen() {
 
       console.log('[QuickAdd] Food created:', foodData);
 
-      // Create or get meal for today
+      // Create or get meal for the date
       const { data: existingMeal } = await supabase
         .from('meals')
         .select('id')
         .eq('user_id', user.id)
-        .eq('date', today)
+        .eq('date', date)
         .eq('meal_type', mealType)
         .maybeSingle();
 
@@ -85,7 +84,7 @@ export default function QuickAddScreen() {
           .from('meals')
           .insert({
             user_id: user.id,
-            date: today,
+            date: date,
             meal_type: mealType,
           })
           .select()

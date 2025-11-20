@@ -14,6 +14,8 @@ export default function AddFoodScreen() {
   const isDark = colorScheme === 'dark';
 
   const mealType = (params.meal as string) || 'breakfast';
+  const date = (params.date as string) || new Date().toISOString().split('T')[0];
+  
   const mealLabels: Record<string, string> = {
     breakfast: 'Breakfast',
     lunch: 'Lunch',
@@ -27,21 +29,21 @@ export default function AddFoodScreen() {
       title: 'Search Food Library',
       description: 'Search OpenFoodFacts database',
       icon: 'search',
-      route: `/food-search?meal=${mealType}`,
+      route: `/food-search?meal=${mealType}&date=${date}`,
     },
     {
       id: 'barcode',
       title: 'Scan Barcode',
       description: 'Scan product barcode',
       icon: 'qr_code_scanner',
-      route: `/barcode-scan?meal=${mealType}`,
+      route: `/barcode-scan?meal=${mealType}&date=${date}`,
     },
     {
       id: 'quick',
       title: 'Quick Add',
       description: 'Manually enter calories & macros',
       icon: 'edit',
-      route: `/quick-add?meal=${mealType}`,
+      route: `/quick-add?meal=${mealType}&date=${date}`,
     },
   ];
 
