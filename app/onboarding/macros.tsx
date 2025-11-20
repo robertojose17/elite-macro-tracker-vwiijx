@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -34,97 +34,112 @@ export default function MacrosScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Macro Preferences
-          </Text>
-          <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            Choose how to distribute your macronutrients
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <MacroOption
-            label="High Protein"
-            description="2.2g/kg protein, 25% fats"
-            selected={preference === 'high_protein'}
-            onPress={() => setPreference('high_protein')}
-            isDark={isDark}
-          />
-          <MacroOption
-            label="Balanced"
-            description="1.8g/kg protein, 30% fats"
-            selected={preference === 'balanced'}
-            onPress={() => setPreference('balanced')}
-            isDark={isDark}
-          />
-          <MacroOption
-            label="Custom"
-            description="Set your own targets"
-            selected={preference === 'custom'}
-            onPress={() => setPreference('custom')}
-            isDark={isDark}
-          />
-        </View>
-
-        {preference === 'custom' && (
-          <View style={styles.customSection}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Custom Macros (grams per day)
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+              Macro Preferences
             </Text>
-            <View style={styles.inputRow}>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Protein
-                </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="160"
-                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  keyboardType="number-pad"
-                  value={customProtein}
-                  onChangeText={setCustomProtein}
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Carbs
-                </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="220"
-                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  keyboardType="number-pad"
-                  value={customCarbs}
-                  onChangeText={setCustomCarbs}
-                />
-              </View>
-              <View style={styles.inputContainer}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Fats
-                </Text>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="61"
-                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                  keyboardType="number-pad"
-                  value={customFats}
-                  onChangeText={setCustomFats}
-                />
+            <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Choose how to distribute your macronutrients
+            </Text>
+          </View>
+
+          <View style={styles.section}>
+            <MacroOption
+              label="High Protein"
+              description="2.2g/kg protein, 25% fats"
+              selected={preference === 'high_protein'}
+              onPress={() => setPreference('high_protein')}
+              isDark={isDark}
+            />
+            <MacroOption
+              label="Balanced"
+              description="1.8g/kg protein, 30% fats"
+              selected={preference === 'balanced'}
+              onPress={() => setPreference('balanced')}
+              isDark={isDark}
+            />
+            <MacroOption
+              label="Custom"
+              description="Set your own targets"
+              selected={preference === 'custom'}
+              onPress={() => setPreference('custom')}
+              isDark={isDark}
+            />
+          </View>
+
+          {preference === 'custom' && (
+            <View style={styles.customSection}>
+              <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                Custom Macros (grams per day)
+              </Text>
+              <View style={styles.inputRow}>
+                <View style={styles.inputContainer}>
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Protein
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                    placeholder="160"
+                    placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                    keyboardType="number-pad"
+                    value={customProtein}
+                    onChangeText={setCustomProtein}
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Carbs
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                    placeholder="220"
+                    placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                    keyboardType="number-pad"
+                    value={customCarbs}
+                    onChangeText={setCustomCarbs}
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={styles.inputContainer}>
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Fats
+                  </Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                    placeholder="61"
+                    placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                    keyboardType="number-pad"
+                    value={customFats}
+                    onChangeText={setCustomFats}
+                    returnKeyType="done"
+                  />
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          )}
 
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={handleContinue}
-        >
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={handleContinue}
+          >
+            <Text style={styles.buttonText}>Continue</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -156,6 +171,9 @@ function MacroOption({ label, description, selected, onPress, isDark }: any) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardView: {
     flex: 1,
   },
   scrollContent: {
@@ -245,5 +263,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  bottomSpacer: {
+    height: 100,
   },
 });

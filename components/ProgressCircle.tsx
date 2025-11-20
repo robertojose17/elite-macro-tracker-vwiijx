@@ -33,28 +33,45 @@ export default function ProgressCircle({
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>
-      <svg width={size} height={size} style={styles.svg}>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={isDark ? colors.borderDark : colors.border}
-          strokeWidth={strokeWidth}
-          fill="none"
+      <View style={styles.circleContainer}>
+        <View 
+          style={[
+            styles.backgroundCircle, 
+            { 
+              width: size, 
+              height: size, 
+              borderRadius: size / 2,
+              borderWidth: strokeWidth,
+              borderColor: isDark ? colors.borderDark : colors.border,
+            }
+          ]} 
         />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          fill="none"
-          strokeDasharray={circumference}
-          strokeDashoffset={strokeDashoffset}
-          strokeLinecap="round"
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
+        <View 
+          style={[
+            styles.progressCircle, 
+            { 
+              width: size, 
+              height: size, 
+              borderRadius: size / 2,
+              borderWidth: strokeWidth,
+              borderColor: color,
+              transform: [{ rotate: '-90deg' }],
+            }
+          ]} 
+        >
+          <View 
+            style={[
+              styles.progressMask,
+              {
+                width: size - strokeWidth * 2,
+                height: size - strokeWidth * 2,
+                borderRadius: (size - strokeWidth * 2) / 2,
+                backgroundColor: isDark ? colors.backgroundDark : colors.background,
+              }
+            ]}
+          />
+        </View>
+      </View>
       <View style={styles.textContainer}>
         <Text style={[styles.value, { color: isDark ? colors.textDark : colors.text }]}>
           {Math.round(current)}
@@ -78,12 +95,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  svg: {
+  circleContainer: {
     position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backgroundCircle: {
+    position: 'absolute',
+  },
+  progressCircle: {
+    position: 'absolute',
+  },
+  progressMask: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
   textContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   value: {
     fontSize: 24,

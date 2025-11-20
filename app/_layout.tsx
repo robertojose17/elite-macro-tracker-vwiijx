@@ -80,6 +80,8 @@ export default function RootLayout() {
       if (!session?.user) return;
 
       try {
+        console.log('Checking onboarding status for user:', session.user.id);
+        
         const { data: userData, error } = await supabase
           .from('users')
           .select('onboarding_completed')
@@ -88,9 +90,16 @@ export default function RootLayout() {
 
         if (error) {
           console.error('Error checking onboarding status:', error);
+          
           // If user doesn't exist in users table, redirect to onboarding
-          console.log('User not found, redirecting to onboarding');
-          router.replace('/onboarding/personal-info');
+          if (error.code === 'PGRST116') {
+            console.log('User not found in database, redirecting to onboarding');
+            router.replace('/onboarding/personal-info');
+          } else {
+            // For other errors, show a friendly message but don't block
+            console.log('Database error, redirecting to onboarding to be safe');
+            router.replace('/onboarding/personal-info');
+          }
           return;
         }
 
@@ -103,6 +112,8 @@ export default function RootLayout() {
         }
       } catch (error) {
         console.error('Error in checkOnboardingStatus:', error);
+        // On error, default to onboarding to be safe
+        router.replace('/onboarding/personal-info');
       }
     };
 

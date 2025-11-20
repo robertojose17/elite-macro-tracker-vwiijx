@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -25,76 +25,92 @@ export default function ActivityScreen() {
     await AsyncStorage.setItem('onboarding_data', JSON.stringify(data));
 
     // Also update user profile in Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase
-        .from('users')
-        .update({
-          activity_level: activity,
-        })
-        .eq('id', user.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('users')
+          .update({
+            activity_level: activity,
+          })
+          .eq('id', user.id);
+      }
+    } catch (error) {
+      console.error('Error updating activity level:', error);
     }
 
     router.push('/onboarding/macros');
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
-            Activity Level
-          </Text>
-          <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            How active are you on a typical day?
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <ActivityOption
-            label="Sedentary"
-            description="Little or no exercise, desk job"
-            selected={activity === 'sedentary'}
-            onPress={() => setActivity('sedentary')}
-            isDark={isDark}
-          />
-          <ActivityOption
-            label="Lightly Active"
-            description="Light exercise 1-3 days/week"
-            selected={activity === 'light'}
-            onPress={() => setActivity('light')}
-            isDark={isDark}
-          />
-          <ActivityOption
-            label="Moderately Active"
-            description="Moderate exercise 3-5 days/week"
-            selected={activity === 'moderate'}
-            onPress={() => setActivity('moderate')}
-            isDark={isDark}
-          />
-          <ActivityOption
-            label="Very Active"
-            description="Hard exercise 6-7 days/week"
-            selected={activity === 'active'}
-            onPress={() => setActivity('active')}
-            isDark={isDark}
-          />
-          <ActivityOption
-            label="Extremely Active"
-            description="Physical job + hard exercise daily"
-            selected={activity === 'very_active'}
-            onPress={() => setActivity('very_active')}
-            isDark={isDark}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
-          onPress={handleContinue}
+    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
+        keyboardVerticalOffset={0}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent} 
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.buttonText}>Continue</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <View style={styles.header}>
+            <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+              Activity Level
+            </Text>
+            <Text style={[styles.subtitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              How active are you on a typical day?
+            </Text>
+          </View>
+
+          <View style={styles.section}>
+            <ActivityOption
+              label="Sedentary"
+              description="Little or no exercise, desk job"
+              selected={activity === 'sedentary'}
+              onPress={() => setActivity('sedentary')}
+              isDark={isDark}
+            />
+            <ActivityOption
+              label="Lightly Active"
+              description="Light exercise 1-3 days/week"
+              selected={activity === 'light'}
+              onPress={() => setActivity('light')}
+              isDark={isDark}
+            />
+            <ActivityOption
+              label="Moderately Active"
+              description="Moderate exercise 3-5 days/week"
+              selected={activity === 'moderate'}
+              onPress={() => setActivity('moderate')}
+              isDark={isDark}
+            />
+            <ActivityOption
+              label="Very Active"
+              description="Hard exercise 6-7 days/week"
+              selected={activity === 'active'}
+              onPress={() => setActivity('active')}
+              isDark={isDark}
+            />
+            <ActivityOption
+              label="Extremely Active"
+              description="Physical job + hard exercise daily"
+              selected={activity === 'very_active'}
+              onPress={() => setActivity('very_active')}
+              isDark={isDark}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={handleContinue}
+          >
+            <Text style={styles.buttonText}>Continue</Text>
+          </TouchableOpacity>
+          
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -126,6 +142,9 @@ function ActivityOption({ label, description, selected, onPress, isDark }: any) 
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  keyboardView: {
     flex: 1,
   },
   scrollContent: {
@@ -189,5 +208,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  bottomSpacer: {
+    height: 100,
   },
 });

@@ -5,6 +5,7 @@ export type GoalType = 'lose' | 'maintain' | 'gain';
 export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type MacroPreference = 'high_protein' | 'balanced' | 'custom';
+export type UnitSystem = 'metric' | 'imperial';
 
 export interface User {
   id: string;
@@ -12,9 +13,10 @@ export interface User {
   user_type: UserType;
   sex: Sex;
   dob: string;
-  height: number; // cm
-  weight: number; // kg
+  height: number; // cm (always stored in cm)
+  weight: number; // kg (always stored in kg)
   activity_level: ActivityLevel;
+  preferred_units?: UnitSystem;
   created_at: string;
 }
 
@@ -97,8 +99,8 @@ export interface Habit {
 export interface OnboardingData {
   sex?: Sex;
   age?: number;
-  height?: number;
-  weight?: number;
+  height?: number; // Always stored in cm
+  weight?: number; // Always stored in kg
   activity_level?: ActivityLevel;
   goal_type?: GoalType;
   goal_intensity?: number; // 0.5 = mild, 1 = moderate, 1.5 = aggressive
@@ -106,4 +108,6 @@ export interface OnboardingData {
   custom_protein?: number;
   custom_carbs?: number;
   custom_fats?: number;
+  preferred_units?: UnitSystem;
+  target_weight?: number;
 }
