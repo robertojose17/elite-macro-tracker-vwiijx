@@ -7,6 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
+import { cmToFeetInches, kgToLbs } from '@/utils/calculations';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,14 +27,13 @@ export default function ProfileScreen() {
       setLoading(true);
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (!authUser) {
-        console.log('No authenticated user found');
+        console.log('[Profile] No authenticated user found');
         setLoading(false);
         return;
       }
 
-      console.log('Loading profile for user:', authUser.id);
+      console.log('[Profile] Loading profile for user:', authUser.id);
 
-      // Use maybeSingle() instead of single() to handle 0 rows gracefully
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -41,16 +41,15 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (userError) {
-        console.error('Error loading user data:', userError);
+        console.error('[Profile] Error loading user data:', userError);
       } else if (userData) {
-        console.log('User data loaded:', userData);
+        console.log('[Profile] User data loaded:', userData);
         setUser({ ...authUser, ...userData });
       } else {
-        console.log('No user data found in database');
+        console.log('[Profile] No user data found in database');
         setUser(authUser);
       }
 
-      // Use maybeSingle() to handle case where no goal exists yet
       const { data: goalData, error: goalError } = await supabase
         .from('goals')
         .select('*')
@@ -59,16 +58,16 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (goalError) {
-        console.error('Error loading goal:', goalError);
+        console.error('[Profile] Error loading goal:', goalError);
       } else if (goalData) {
-        console.log('Goal data loaded:', goalData);
+        console.log('[Profile] Goal data loaded:', goalData);
         setGoal(goalData);
       } else {
-        console.log('No active goal found for user');
+        console.log('[Profile] No active goal found for user');
         setGoal(null);
       }
     } catch (error) {
-      console.error('Error in loadUserData:', error);
+      console.error('[Profile] Error in loadUserData:', error);
     } finally {
       setLoading(false);
     }
@@ -128,6 +127,21 @@ export default function ProfileScreen() {
     return age;
   };
 
+  const formatHeight = (heightCm: number, units: string) => {
+    if (units === 'imperial') {
+      const { feet, inches } = cmToFeetInches(heightCm);
+      return `${feet}' ${inches}"`;
+    }
+    return `${Math.round(heightCm)} cm`;
+  };
+
+  const formatWeight = (weightKg: number, units: string) => {
+    if (units === 'imperial') {
+      return `${Math.round(kgToLbs(weightKg))} lbs`;
+    }
+    return `${Math.round(weightKg)} kg`;
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -157,6 +171,8 @@ export default function ProfileScreen() {
       </SafeAreaView>
     );
   }
+
+  const units = user.preferred_units || 'metric';
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -196,10 +212,18 @@ export default function ProfileScreen() {
             
             <View style={styles.statsGrid}>
               {user.height && (
-                <StatItem label="Height" value={`${Math.round(user.height)} cm`} isDark={isDark} />
+                <StatItem 
+                  label="Height" 
+                  value={formatHeight(user.height, units)} 
+                  isDark={isDark} 
+                />
               )}
               {user.current_weight && (
-                <StatItem label="Weight" value={`${Math.round(user.current_weight)} kg`} isDark={isDark} />
+                <StatItem 
+                  label="Weight" 
+                  value={formatWeight(user.current_weight, units)} 
+                  isDark={isDark} 
+                />
               )}
               {user.date_of_birth && (
                 <StatItem label="Age" value={`${calculateAge(user.date_of_birth)} years`} isDark={isDark} />
@@ -208,6 +232,20 @@ export default function ProfileScreen() {
                 <StatItem 
                   label="Sex" 
                   value={user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : 'Other'} 
+                  isDark={isDark} 
+                />
+              )}
+              {user.preferred_units && (
+                <StatItem 
+                  label="Units" 
+                  value={user.preferred_units === 'imperial' ? 'Imperial' : 'Metric'} 
+                  isDark={isDark} 
+                />
+              )}
+              {user.activity_level && (
+                <StatItem 
+                  label="Activity" 
+                  value={user.activity_level.charAt(0).toUpperCase() + user.activity_level.slice(1).replace('_', ' ')} 
                   isDark={isDark} 
                 />
               )}
@@ -272,59 +310,6 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Settings
-          </Text>
-          
-          <SettingItem
-            icon="notifications"
-            label="Reminders"
-            onPress={() => console.log('Reminders')}
-            isDark={isDark}
-          />
-          <SettingItem
-            icon="dark_mode"
-            label="Theme"
-            value={colorScheme === 'dark' ? 'Dark' : 'Light'}
-            onPress={() => console.log('Theme')}
-            isDark={isDark}
-          />
-          <SettingItem
-            icon="language"
-            label="Units"
-            value={user.preferred_units === 'imperial' ? 'Imperial' : 'Metric'}
-            onPress={() => console.log('Units')}
-            isDark={isDark}
-          />
-        </View>
-
-        <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Developer
-          </Text>
-          
-          <SettingItem
-            icon="cloud_upload"
-            label="Publish App"
-            onPress={() => router.push('/publish')}
-            isDark={isDark}
-          />
-        </View>
-
-        {user.user_type !== 'premium' && (
-          <TouchableOpacity
-            style={[styles.premiumCard, { backgroundColor: colors.accent }]}
-            onPress={() => console.log('Upgrade to premium')}
-          >
-            <Text style={styles.premiumIcon}>⭐</Text>
-            <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
-            <Text style={styles.premiumSubtitle}>
-              Unlock advanced analytics, custom recipes, and more
-            </Text>
-          </TouchableOpacity>
-        )}
-
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
           onPress={handleLogout}
@@ -348,37 +333,6 @@ function StatItem({ label, value, isDark }: any) {
         {value}
       </Text>
     </View>
-  );
-}
-
-function SettingItem({ icon, label, value, onPress, isDark }: any) {
-  return (
-    <TouchableOpacity style={styles.settingItem} onPress={onPress}>
-      <View style={styles.settingLeft}>
-        <IconSymbol
-          ios_icon_name={icon}
-          android_material_icon_name={icon}
-          size={24}
-          color={isDark ? colors.textDark : colors.text}
-        />
-        <Text style={[styles.settingLabel, { color: isDark ? colors.textDark : colors.text }]}>
-          {label}
-        </Text>
-      </View>
-      <View style={styles.settingRight}>
-        {value && (
-          <Text style={[styles.settingValue, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {value}
-          </Text>
-        )}
-        <IconSymbol
-          ios_icon_name="chevron_right"
-          android_material_icon_name="chevron_right"
-          size={20}
-          color={isDark ? colors.textSecondaryDark : colors.textSecondary}
-        />
-      </View>
-    </TouchableOpacity>
   );
 }
 
@@ -510,58 +464,6 @@ const styles = StyleSheet.create({
   editButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
-  },
-  settingsCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  settingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  settingLabel: {
-    ...typography.body,
-  },
-  settingRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  settingValue: {
-    ...typography.body,
-  },
-  premiumCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.md,
-    boxShadow: '0px 4px 12px rgba(212, 175, 55, 0.3)',
-    elevation: 3,
-  },
-  premiumIcon: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
-  },
-  premiumTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  premiumSubtitle: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    textAlign: 'center',
   },
   logoutButton: {
     borderRadius: borderRadius.lg,

@@ -45,16 +45,20 @@ export default function RootLayout() {
 
   const initializeApp = async () => {
     try {
+      console.log('[App] Initializing app...');
+      
       // Initialize food database
       await initializeFoodDatabase();
+      console.log('[App] Food database initialized');
 
       // Get current session
       const { data: { session: currentSession } } = await supabase.auth.getSession();
+      console.log('[App] Current session:', currentSession?.user?.id || 'none');
       setSession(currentSession);
 
       // Listen for auth changes
       const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        console.log('Auth state changed:', _event, session?.user?.id);
+        console.log('[App] Auth state changed:', _event, session?.user?.id || 'none');
         setSession(session);
       });
 
@@ -66,7 +70,7 @@ export default function RootLayout() {
         subscription.unsubscribe();
       };
     } catch (error) {
-      console.error('Failed to initialize app:', error);
+      console.error('[App] Failed to initialize app:', error);
       setIsReady(true);
       setInitializing(false);
       SplashScreen.hideAsync();
@@ -76,69 +80,67 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isReady || initializing) return;
 
-    const checkOnboardingStatus = async () => {
-      if (!session?.user) return;
+    const handleNavigation = async () => {
+      const inAuthGroup = segments[0] === 'auth';
+      const inOnboardingGroup = segments[0] === 'onboarding';
+      const inTabsGroup = segments[0] === '(tabs)';
 
-      try {
-        console.log('Checking onboarding status for user:', session.user.id);
-        
-        // Use maybeSingle() to handle 0 rows gracefully
-        const { data: userData, error } = await supabase
-          .from('users')
-          .select('onboarding_completed')
-          .eq('id', session.user.id)
-          .maybeSingle();
+      console.log('[Navigation] Current state:', { 
+        hasSession: !!session, 
+        segments, 
+        inAuthGroup, 
+        inOnboardingGroup, 
+        inTabsGroup 
+      });
 
-        if (error) {
-          console.error('Error checking onboarding status:', error);
-          // If there's an error, redirect to onboarding to be safe
-          console.log('Error occurred, redirecting to onboarding');
-          router.replace('/onboarding/personal-info');
-          return;
+      // Not logged in - redirect to auth
+      if (!session) {
+        if (!inAuthGroup) {
+          console.log('[Navigation] No session, redirecting to welcome');
+          router.replace('/auth/welcome');
         }
+        return;
+      }
 
-        if (!userData) {
-          // User doesn't exist in database yet, redirect to onboarding
-          console.log('User not found in database, redirecting to onboarding');
-          router.replace('/onboarding/personal-info');
-          return;
-        }
+      // Logged in - check onboarding status
+      if (session && (inAuthGroup || segments.length === 0)) {
+        try {
+          console.log('[Navigation] Checking onboarding status for user:', session.user.id);
+          
+          const { data: userData, error } = await supabase
+            .from('users')
+            .select('onboarding_completed')
+            .eq('id', session.user.id)
+            .maybeSingle();
 
-        if (userData.onboarding_completed) {
-          console.log('Onboarding completed, redirecting to home');
-          router.replace('/(tabs)/(home)/');
-        } else {
-          console.log('Onboarding not completed, redirecting to onboarding');
+          if (error) {
+            console.error('[Navigation] Error checking onboarding:', error);
+            // On error, default to onboarding
+            router.replace('/onboarding/personal-info');
+            return;
+          }
+
+          if (!userData) {
+            console.log('[Navigation] User not in database, redirecting to onboarding');
+            router.replace('/onboarding/personal-info');
+            return;
+          }
+
+          if (userData.onboarding_completed) {
+            console.log('[Navigation] Onboarding complete, redirecting to home');
+            router.replace('/(tabs)/(home)/');
+          } else {
+            console.log('[Navigation] Onboarding not complete, redirecting to onboarding');
+            router.replace('/onboarding/personal-info');
+          }
+        } catch (error) {
+          console.error('[Navigation] Error in handleNavigation:', error);
           router.replace('/onboarding/personal-info');
         }
-      } catch (error) {
-        console.error('Error in checkOnboardingStatus:', error);
-        // On error, default to onboarding to be safe
-        router.replace('/onboarding/personal-info');
       }
     };
 
-    const inAuthGroup = segments[0] === 'auth';
-    const inOnboardingGroup = segments[0] === 'onboarding';
-    const inTabsGroup = segments[0] === '(tabs)';
-
-    console.log('Navigation check:', { 
-      session: !!session, 
-      segments, 
-      inAuthGroup, 
-      inOnboardingGroup, 
-      inTabsGroup 
-    });
-
-    if (!session && !inAuthGroup) {
-      // Not logged in, redirect to auth
-      console.log('Redirecting to auth/welcome');
-      router.replace('/auth/welcome');
-    } else if (session && (inAuthGroup || segments.length === 0)) {
-      // Logged in but on auth screen or root, check onboarding status
-      console.log('Checking onboarding status');
-      checkOnboardingStatus();
-    }
+    handleNavigation();
   }, [session, segments, isReady, initializing]);
 
   React.useEffect(() => {
@@ -199,13 +201,6 @@ export default function RootLayout() {
               
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               
-              <Stack.Screen
-                name="onboarding/welcome"
-                options={{
-                  headerShown: false,
-                  presentation: "card",
-                }}
-              />
               <Stack.Screen
                 name="onboarding/personal-info"
                 options={{
