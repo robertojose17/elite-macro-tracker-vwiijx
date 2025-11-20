@@ -1,13 +1,12 @@
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import ProgressCircle from '@/components/ProgressCircle';
 import MacroBar from '@/components/MacroBar';
-import { mockGoal, mockDailySummary } from '@/data/mockData';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 
@@ -15,57 +14,165 @@ export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [goal, setGoal] = useState(mockGoal);
-  const [summary, setSummary] = useState(mockDailySummary);
+  
+  const [goal, setGoal] = useState<any>(null);
+  const [summary, setSummary] = useState<any>({
+    total_calories: 0,
+    total_protein: 0,
+    total_carbs: 0,
+    total_fats: 0,
+    total_fiber: 0,
+  });
+  const [foodItems, setFoodItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadUserGoal();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Home iOS] Screen focused, loading data');
+      loadData();
+    }, [])
+  );
 
-  const loadUserGoal = async () => {
+  const loadData = async () => {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.log('[Home iOS] No user found');
+        setLoading(false);
+        return;
+      }
 
-      const { data: goalData, error } = await supabase
+      console.log('[Home iOS] Loading data for user:', user.id);
+
+      // Load goal
+      const { data: goalData, error: goalError } = await supabase
         .from('goals')
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        console.error('Error loading goal:', error);
-        return;
-      }
-
-      if (goalData) {
+      if (goalError) {
+        console.error('[Home iOS] Error loading goal:', goalError);
+      } else if (goalData) {
+        console.log('[Home iOS] Goal loaded:', goalData);
+        setGoal(goalData);
+      } else {
+        console.log('[Home iOS] No active goal found, using defaults');
         setGoal({
-          id: goalData.id,
-          user_id: goalData.user_id,
-          goal_type: goalData.goal_type,
-          daily_calories: goalData.daily_calories,
-          protein_g: goalData.protein_g,
-          carbs_g: goalData.carbs_g,
-          fats_g: goalData.fats_g,
-          fiber_g: goalData.fiber_g,
-          is_active: goalData.is_active,
-          created_at: goalData.created_at,
+          daily_calories: 2000,
+          protein_g: 150,
+          carbs_g: 200,
+          fats_g: 65,
+          fiber_g: 30,
         });
       }
+
+      // Load today's meals and food items
+      const today = new Date().toISOString().split('T')[0];
+      const { data: mealsData, error: mealsError } = await supabase
+        .from('meals')
+        .select(`
+          id,
+          meal_type,
+          meal_items (
+            id,
+            quantity,
+            calories,
+            protein,
+            carbs,
+            fats,
+            fiber,
+            foods (
+              id,
+              name,
+              brand
+            )
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('date', today);
+
+      if (mealsError) {
+        console.error('[Home iOS] Error loading meals:', mealsError);
+      } else {
+        console.log('[Home iOS] Meals loaded:', mealsData);
+        
+        // Flatten meal items for display
+        const items: any[] = [];
+        let totals = {
+          total_calories: 0,
+          total_protein: 0,
+          total_carbs: 0,
+          total_fats: 0,
+          total_fiber: 0,
+        };
+
+        if (mealsData && mealsData.length > 0) {
+          mealsData.forEach((meal: any) => {
+            if (meal.meal_items) {
+              meal.meal_items.forEach((item: any) => {
+                items.push({
+                  ...item,
+                  meal_type: meal.meal_type,
+                });
+                totals.total_calories += item.calories || 0;
+                totals.total_protein += item.protein || 0;
+                totals.total_carbs += item.carbs || 0;
+                totals.total_fats += item.fats || 0;
+                totals.total_fiber += item.fiber || 0;
+              });
+            }
+          });
+        }
+
+        console.log('[Home iOS] Food items:', items.length);
+        console.log('[Home iOS] Totals:', totals);
+        setFoodItems(items);
+        setSummary(totals);
+      }
     } catch (error) {
-      console.error('Error in loadUserGoal:', error);
+      console.error('[Home iOS] Error in loadData:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const caloriesRemaining = goal.daily_calories - summary.total_calories;
-  const streakDays = 7;
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const handleAddFood = () => {
+    console.log('[Home iOS] Opening add food screen');
+    router.push('/add-food-simple');
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            Loading...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const caloriesRemaining = (goal?.daily_calories || 2000) - summary.total_calories;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.header}>
           <View>
@@ -79,22 +186,14 @@ export default function HomeScreen() {
         </View>
 
         <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={styles.caloriesHeader}>
-            <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Calories
-            </Text>
-            <View style={styles.streakBadge}>
-              <Text style={styles.streakIcon}>🔥</Text>
-              <Text style={[styles.streakText, { color: isDark ? colors.textDark : colors.text }]}>
-                {streakDays} day streak
-              </Text>
-            </View>
-          </View>
+          <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Calories
+          </Text>
           
           <View style={styles.caloriesContent}>
             <ProgressCircle
               current={summary.total_calories}
-              target={goal.daily_calories}
+              target={goal?.daily_calories || 2000}
               size={140}
               strokeWidth={12}
               color={colors.calories}
@@ -104,21 +203,21 @@ export default function HomeScreen() {
             <View style={styles.caloriesStats}>
               <StatItem
                 label="Consumed"
-                value={summary.total_calories}
+                value={Math.round(summary.total_calories)}
                 unit="kcal"
                 color={colors.calories}
                 isDark={isDark}
               />
               <StatItem
                 label="Remaining"
-                value={caloriesRemaining}
+                value={Math.round(caloriesRemaining)}
                 unit="kcal"
                 color={caloriesRemaining >= 0 ? colors.success : colors.error}
                 isDark={isDark}
               />
               <StatItem
                 label="Target"
-                value={goal.daily_calories}
+                value={goal?.daily_calories || 2000}
                 unit="kcal"
                 color={isDark ? colors.textSecondaryDark : colors.textSecondary}
                 isDark={isDark}
@@ -136,77 +235,82 @@ export default function HomeScreen() {
             <MacroBar
               label="Protein"
               current={summary.total_protein}
-              target={goal.protein_g}
+              target={goal?.protein_g || 150}
               color={colors.protein}
             />
             <MacroBar
               label="Carbs"
               current={summary.total_carbs}
-              target={goal.carbs_g}
+              target={goal?.carbs_g || 200}
               color={colors.carbs}
             />
             <MacroBar
               label="Fats"
               current={summary.total_fats}
-              target={goal.fats_g}
+              target={goal?.fats_g || 65}
               color={colors.fats}
             />
             <MacroBar
               label="Fiber"
               current={summary.total_fiber}
-              target={goal.fiber_g}
+              target={goal?.fiber_g || 30}
               color={colors.fiber}
             />
           </View>
         </View>
 
-        <View style={[styles.quickActionsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Quick Actions
-          </Text>
-          
-          <View style={styles.quickActions}>
-            <QuickActionButton
-              icon="restaurant"
-              label="Add Food"
-              onPress={() => router.push('/(tabs)/diary')}
-              isDark={isDark}
-            />
-            <QuickActionButton
-              icon="scale"
-              label="Log Weight"
-              onPress={() => router.push('/(tabs)/progress')}
-              isDark={isDark}
-            />
-            <QuickActionButton
-              icon="water_drop"
-              label="Water"
-              onPress={() => console.log('Log water')}
-              isDark={isDark}
-            />
-          </View>
-        </View>
-
-        <View style={[styles.weightCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={styles.weightHeader}>
+        <View style={[styles.foodsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <View style={styles.foodsHeader}>
             <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Current Weight
+              Today&apos;s Foods
             </Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/progress')}>
-              <Text style={[styles.viewAllText, { color: colors.primary }]}>
-                View Chart
-              </Text>
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.primary }]}
+              onPress={handleAddFood}
+            >
+              <IconSymbol
+                ios_icon_name="add"
+                android_material_icon_name="add"
+                size={20}
+                color="#FFFFFF"
+              />
+              <Text style={styles.addButtonText}>Add Food</Text>
             </TouchableOpacity>
           </View>
-          
-          <View style={styles.weightContent}>
-            <Text style={[styles.weightValue, { color: isDark ? colors.textDark : colors.text }]}>
-              {summary.weight} kg
-            </Text>
-            <Text style={[styles.weightChange, { color: colors.success }]}>
-              -2 kg this month
-            </Text>
-          </View>
+
+          {foodItems.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>🍽️</Text>
+              <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                No foods logged yet today
+              </Text>
+              <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Tap &quot;Add Food&quot; to start tracking
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.foodsList}>
+              {foodItems.map((item, index) => (
+                <React.Fragment key={index}>
+                  <View style={styles.foodItem}>
+                    <View style={styles.foodInfo}>
+                      <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                        {item.foods?.name || 'Unknown Food'}
+                      </Text>
+                      {item.foods?.brand && (
+                        <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                          {item.foods.brand}
+                        </Text>
+                      )}
+                      <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                        {Math.round(item.calories)} kcal • P: {Math.round(item.protein)}g • C: {Math.round(item.carbs)}g • F: {Math.round(item.fats)}g
+                      </Text>
+                    </View>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -217,7 +321,7 @@ function StatItem({ label, value, unit, color, isDark }: any) {
   return (
     <View style={styles.statItem}>
       <Text style={[styles.statValue, { color }]}>
-        {Math.round(value)}
+        {value}
       </Text>
       <Text style={[styles.statLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
         {label}
@@ -226,28 +330,17 @@ function StatItem({ label, value, unit, color, isDark }: any) {
   );
 }
 
-function QuickActionButton({ icon, label, onPress, isDark }: any) {
-  return (
-    <TouchableOpacity
-      style={[styles.quickActionButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-      onPress={onPress}
-    >
-      <IconSymbol
-        ios_icon_name={icon}
-        android_material_icon_name={icon}
-        size={28}
-        color={colors.primary}
-      />
-      <Text style={[styles.quickActionLabel, { color: isDark ? colors.textDark : colors.text }]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    ...typography.body,
   },
   scrollContent: {
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
@@ -274,26 +367,9 @@ const styles = StyleSheet.create({
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
-  caloriesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
   cardTitle: {
     ...typography.h3,
-  },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  streakIcon: {
-    fontSize: 16,
-  },
-  streakText: {
-    ...typography.caption,
-    fontWeight: '600',
+    marginBottom: spacing.md,
   },
   caloriesContent: {
     flexDirection: 'row',
@@ -324,58 +400,69 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   macrosContent: {
-    marginTop: spacing.md,
+    gap: spacing.md,
   },
-  quickActionsCard: {
+  foodsCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
-  quickActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  quickActionButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  quickActionLabel: {
-    ...typography.small,
-    fontWeight: '600',
-  },
-  weightCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
-    elevation: 2,
-  },
-  weightHeader: {
+  foodsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  viewAllText: {
-    ...typography.caption,
-    fontWeight: '600',
-  },
-  weightContent: {
+  addButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
   },
-  weightValue: {
-    fontSize: 36,
-    fontWeight: '700',
+  addButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  emptyIcon: {
+    fontSize: 48,
+    marginBottom: spacing.sm,
+  },
+  emptyText: {
+    ...typography.body,
     marginBottom: spacing.xs,
   },
-  weightChange: {
-    ...typography.body,
-    fontWeight: '600',
+  emptySubtext: {
+    ...typography.caption,
+  },
+  foodsList: {
+    gap: spacing.sm,
+  },
+  foodItem: {
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  foodInfo: {
+    flex: 1,
+  },
+  foodName: {
+    ...typography.bodyBold,
+    marginBottom: 2,
+  },
+  foodBrand: {
+    ...typography.caption,
+    marginBottom: 2,
+  },
+  foodMacros: {
+    ...typography.caption,
   },
 });

@@ -116,13 +116,13 @@ export default function RootLayout() {
           if (error) {
             console.error('[Navigation] Error checking onboarding:', error);
             // On error, default to onboarding
-            router.replace('/onboarding/personal-info');
+            router.replace('/onboarding/complete');
             return;
           }
 
           if (!userData) {
             console.log('[Navigation] User not in database, redirecting to onboarding');
-            router.replace('/onboarding/personal-info');
+            router.replace('/onboarding/complete');
             return;
           }
 
@@ -131,11 +131,11 @@ export default function RootLayout() {
             router.replace('/(tabs)/(home)/');
           } else {
             console.log('[Navigation] Onboarding not complete, redirecting to onboarding');
-            router.replace('/onboarding/personal-info');
+            router.replace('/onboarding/complete');
           }
         } catch (error) {
           console.error('[Navigation] Error in handleNavigation:', error);
-          router.replace('/onboarding/personal-info');
+          router.replace('/onboarding/complete');
         }
       }
     };
@@ -202,35 +202,7 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               
               <Stack.Screen
-                name="onboarding/personal-info"
-                options={{
-                  headerShown: false,
-                  presentation: "card",
-                }}
-              />
-              <Stack.Screen
-                name="onboarding/goals"
-                options={{
-                  headerShown: false,
-                  presentation: "card",
-                }}
-              />
-              <Stack.Screen
-                name="onboarding/activity"
-                options={{
-                  headerShown: false,
-                  presentation: "card",
-                }}
-              />
-              <Stack.Screen
-                name="onboarding/macros"
-                options={{
-                  headerShown: false,
-                  presentation: "card",
-                }}
-              />
-              <Stack.Screen
-                name="onboarding/results"
+                name="onboarding/complete"
                 options={{
                   headerShown: false,
                   presentation: "card",
@@ -238,45 +210,13 @@ export default function RootLayout() {
               />
               
               <Stack.Screen
-                name="add-food"
+                name="add-food-simple"
                 options={{
                   headerShown: false,
                   presentation: "modal",
                 }}
               />
               
-              <Stack.Screen
-                name="barcode-scanner"
-                options={{
-                  headerShown: false,
-                  presentation: "fullScreenModal",
-                }}
-              />
-              
-              <Stack.Screen
-                name="food-detail"
-                options={{
-                  headerShown: false,
-                  presentation: "modal",
-                }}
-              />
-              
-              <Stack.Screen
-                name="create-food"
-                options={{
-                  headerShown: false,
-                  presentation: "modal",
-                }}
-              />
-
-              <Stack.Screen
-                name="ai-meal-estimator"
-                options={{
-                  headerShown: false,
-                  presentation: "modal",
-                }}
-              />
-
               <Stack.Screen
                 name="publish"
                 options={{

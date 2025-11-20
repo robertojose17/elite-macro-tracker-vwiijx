@@ -38,26 +38,33 @@ export default function LoginScreen() {
       }
 
       if (data.user) {
+        console.log('[Login] User logged in:', data.user.id);
+        
         // Check if user has completed onboarding
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('onboarding_completed')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
 
         if (userError) {
-          console.error('User fetch error:', userError);
+          console.error('[Login] User fetch error:', userError);
+          // Default to onboarding on error
+          router.replace('/onboarding/complete');
+          return;
         }
 
         // Navigate based on onboarding status
         if (userData?.onboarding_completed) {
+          console.log('[Login] Onboarding complete, going to home');
           router.replace('/(tabs)/(home)/');
         } else {
-          router.replace('/onboarding/personal-info');
+          console.log('[Login] Onboarding not complete, going to onboarding');
+          router.replace('/onboarding/complete');
         }
       }
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('[Login] Login error:', error);
       Alert.alert('Error', error.message || 'An error occurred during login');
     } finally {
       setLoading(false);

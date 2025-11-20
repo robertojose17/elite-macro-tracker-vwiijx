@@ -1,47 +1,198 @@
 
-import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from "react-native-safe-area-context";
-import { IconSymbol } from "@/components/IconSymbol";
-import { GlassView } from "expo-glass-effect";
-import { useTheme } from "@react-navigation/native";
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { IconSymbol } from '@/components/IconSymbol';
+import { GlassView } from 'expo-glass-effect';
+import { useTheme } from '@react-navigation/native';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
-import { mockUser, mockGoal } from '@/data/mockData';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/app/integrations/supabase/client';
+import { cmToFeetInches, kgToLbs } from '@/utils/calculations';
 
 export default function ProfileScreen() {
   const theme = useTheme();
   const router = useRouter();
   const isDark = theme.dark;
 
-  const user = mockUser;
-  const goal = mockGoal;
+  const [user, setUser] = useState<any>(null);
+  const [goal, setGoal] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleResetOnboarding = async () => {
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Profile iOS] Screen focused, loading data');
+      loadUserData();
+    }, [])
+  );
+
+  const loadUserData = async () => {
+    try {
+      setLoading(true);
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        console.log('[Profile iOS] No authenticated user found');
+        setLoading(false);
+        return;
+      }
+
+      console.log('[Profile iOS] Loading profile for user:', authUser.id);
+
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (userError) {
+        console.error('[Profile iOS] Error loading user data:', userError);
+      } else if (userData) {
+        console.log('[Profile iOS] User data loaded:', userData);
+        setUser({ ...authUser, ...userData });
+      } else {
+        console.log('[Profile iOS] No user data found in database');
+        setUser(authUser);
+      }
+
+      const { data: goalData, error: goalError } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (goalError) {
+        console.error('[Profile iOS] Error loading goal:', goalError);
+      } else if (goalData) {
+        console.log('[Profile iOS] Goal data loaded:', goalData);
+        setGoal(goalData);
+      } else {
+        console.log('[Profile iOS] No active goal found for user');
+        setGoal(null);
+      }
+    } catch (error) {
+      console.error('[Profile iOS] Error in loadUserData:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadUserData();
+  };
+
+  const handleLogout = async () => {
     Alert.alert(
-      'Reset Onboarding',
-      'This will clear your onboarding data and let you set up your goals again.',
+      'Log Out',
+      'Are you sure you want to log out?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset',
+          text: 'Log Out',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('onboarding_complete');
-            await AsyncStorage.removeItem('onboarding_data');
-            router.push('/onboarding/welcome');
+            await supabase.auth.signOut();
+            router.replace('/auth/welcome');
           },
         },
       ]
     );
   };
 
+  const handleResetOnboarding = async () => {
+    Alert.alert(
+      'Reset Goals',
+      'This will let you set up your goals again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            if (user) {
+              await supabase
+                .from('users')
+                .update({ onboarding_completed: false })
+                .eq('id', user.id);
+              
+              router.push('/onboarding/complete');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const calculateAge = (dob: string) => {
+    if (!dob) return 'N/A';
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const formatHeight = (heightCm: number, units: string) => {
+    if (units === 'imperial') {
+      const { feet, inches } = cmToFeetInches(heightCm);
+      return `${feet}' ${inches}"`;
+    }
+    return `${Math.round(heightCm)} cm`;
+  };
+
+  const formatWeight = (weightKg: number, units: string) => {
+    if (units === 'imperial') {
+      return `${Math.round(kgToLbs(weightKg))} lbs`;
+    }
+    return `${Math.round(weightKg)} kg`;
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            Loading profile...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>
+            No user data available
+          </Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={() => router.replace('/auth/welcome')}
+          >
+            <Text style={styles.buttonText}>Go to Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const units = user.preferred_units || 'metric';
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <GlassView style={styles.profileHeader} glassEffectStyle="regular">
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
@@ -59,87 +210,96 @@ export default function ProfileScreen() {
           </View>
         </GlassView>
 
-        <GlassView style={styles.section} glassEffectStyle="regular">
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Your Stats
-          </Text>
-          <View style={styles.statsGrid}>
-            <StatItem label="Height" value={`${user.height} cm`} theme={theme} />
-            <StatItem label="Weight" value={`${user.weight} kg`} theme={theme} />
-            <StatItem label="Age" value={`${new Date().getFullYear() - new Date(user.dob).getFullYear()} years`} theme={theme} />
-            <StatItem label="Sex" value={user.sex === 'male' ? 'Male' : 'Female'} theme={theme} />
-          </View>
-        </GlassView>
+        {(user.height || user.current_weight) && (
+          <GlassView style={styles.section} glassEffectStyle="regular">
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Your Stats
+            </Text>
+            <View style={styles.statsGrid}>
+              {user.height && (
+                <StatItem 
+                  label="Height" 
+                  value={formatHeight(user.height, units)} 
+                  theme={theme} 
+                />
+              )}
+              {user.current_weight && (
+                <StatItem 
+                  label="Weight" 
+                  value={formatWeight(user.current_weight, units)} 
+                  theme={theme} 
+                />
+              )}
+              {user.date_of_birth && (
+                <StatItem label="Age" value={`${calculateAge(user.date_of_birth)} years`} theme={theme} />
+              )}
+              {user.sex && (
+                <StatItem 
+                  label="Sex" 
+                  value={user.sex === 'male' ? 'Male' : user.sex === 'female' ? 'Female' : 'Other'} 
+                  theme={theme} 
+                />
+              )}
+            </View>
+          </GlassView>
+        )}
 
-        <GlassView style={styles.section} glassEffectStyle="regular">
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Current Goals
-          </Text>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
-              Goal Type
+        {goal ? (
+          <GlassView style={styles.section} glassEffectStyle="regular">
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              Current Goals
             </Text>
-            <Text style={[styles.goalValue, { color: theme.colors.text }]}>
-              {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
-            </Text>
-          </View>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
-              Daily Calories
-            </Text>
-            <Text style={[styles.goalValue, { color: theme.colors.text }]}>
-              {goal.daily_calories} kcal
-            </Text>
-          </View>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
-              Macros
-            </Text>
-            <Text style={[styles.goalValue, { color: theme.colors.text }]}>
-              P: {goal.protein_g}g • C: {goal.carbs_g}g • F: {goal.fats_g}g
-            </Text>
-          </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
+                Goal Type
+              </Text>
+              <Text style={[styles.goalValue, { color: theme.colors.text }]}>
+                {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
+              </Text>
+            </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
+                Daily Calories
+              </Text>
+              <Text style={[styles.goalValue, { color: theme.colors.text }]}>
+                {goal.daily_calories} kcal
+              </Text>
+            </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? '#98989D' : '#666' }]}>
+                Macros
+              </Text>
+              <Text style={[styles.goalValue, { color: theme.colors.text }]}>
+                P: {goal.protein_g}g • C: {goal.carbs_g}g • F: {goal.fats_g}g
+              </Text>
+            </View>
 
-          <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: colors.primary }]}
-            onPress={handleResetOnboarding}
-          >
-            <Text style={styles.editButtonText}>Edit Goals</Text>
-          </TouchableOpacity>
-        </GlassView>
-
-        <GlassView style={styles.section} glassEffectStyle="regular">
-          <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
-            Settings
-          </Text>
-          
-          <SettingItem
-            icon="bell.fill"
-            androidIcon="notifications"
-            label="Reminders"
-            onPress={() => console.log('Reminders')}
-            theme={theme}
-          />
-          <SettingItem
-            icon="moon.fill"
-            androidIcon="dark_mode"
-            label="Theme"
-            value={theme.dark ? 'Dark' : 'Light'}
-            onPress={() => console.log('Theme')}
-            theme={theme}
-          />
-          <SettingItem
-            icon="globe"
-            androidIcon="language"
-            label="Units"
-            value="Metric"
-            onPress={() => console.log('Units')}
-            theme={theme}
-          />
-        </GlassView>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={handleResetOnboarding}
+            >
+              <Text style={styles.editButtonText}>Edit Goals</Text>
+            </TouchableOpacity>
+          </GlassView>
+        ) : (
+          <GlassView style={styles.section} glassEffectStyle="regular">
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+              No Goals Set
+            </Text>
+            <Text style={[styles.noGoalText, { color: isDark ? '#98989D' : '#666' }]}>
+              Complete onboarding to set your nutrition goals
+            </Text>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push('/onboarding/complete')}
+            >
+              <Text style={styles.editButtonText}>Set Up Goals</Text>
+            </TouchableOpacity>
+          </GlassView>
+        )}
 
         <GlassView style={styles.section} glassEffectStyle="regular">
           <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -155,22 +315,9 @@ export default function ProfileScreen() {
           />
         </GlassView>
 
-        {user.user_type !== 'premium' && (
-          <TouchableOpacity
-            style={[styles.premiumCard, { backgroundColor: colors.accent }]}
-            onPress={() => console.log('Upgrade to premium')}
-          >
-            <Text style={styles.premiumIcon}>⭐</Text>
-            <Text style={styles.premiumTitle}>Upgrade to Premium</Text>
-            <Text style={styles.premiumSubtitle}>
-              Unlock advanced analytics, custom recipes, and more
-            </Text>
-          </TouchableOpacity>
-        )}
-
         <TouchableOpacity
           style={[styles.logoutButton, { borderColor: colors.error }]}
-          onPress={() => console.log('Logout')}
+          onPress={handleLogout}
         >
           <Text style={[styles.logoutText, { color: colors.error }]}>
             Log Out
@@ -236,6 +383,24 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 120,
   },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+  },
+  loadingText: {
+    ...typography.body,
+  },
+  button: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
   profileHeader: {
     alignItems: 'center',
     borderRadius: 12,
@@ -269,9 +434,6 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 24,
     fontWeight: 'bold',
-  },
-  email: {
-    fontSize: 16,
   },
   section: {
     borderRadius: 12,
@@ -313,6 +475,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
+  noGoalText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
   editButton: {
     borderRadius: borderRadius.md,
     paddingVertical: spacing.sm,
@@ -344,27 +511,6 @@ const styles = StyleSheet.create({
   },
   settingValue: {
     fontSize: 16,
-  },
-  premiumCard: {
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  premiumIcon: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
-  },
-  premiumTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: spacing.xs,
-  },
-  premiumSubtitle: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 14,
-    textAlign: 'center',
   },
   logoutButton: {
     borderRadius: borderRadius.lg,

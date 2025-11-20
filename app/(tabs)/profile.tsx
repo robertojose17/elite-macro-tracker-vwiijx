@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert, RefreshControl } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -17,10 +17,14 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<any>(null);
   const [goal, setGoal] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      console.log('[Profile] Screen focused, loading data');
+      loadUserData();
+    }, [])
+  );
 
   const loadUserData = async () => {
     try {
@@ -70,7 +74,13 @@ export default function ProfileScreen() {
       console.error('[Profile] Error in loadUserData:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadUserData();
   };
 
   const handleLogout = async () => {
@@ -107,7 +117,7 @@ export default function ProfileScreen() {
                 .update({ onboarding_completed: false })
                 .eq('id', user.id);
               
-              router.push('/onboarding/personal-info');
+              router.push('/onboarding/complete');
             }
           },
         },
@@ -185,6 +195,9 @@ export default function ProfileScreen() {
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={[styles.profileCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
@@ -303,7 +316,7 @@ export default function ProfileScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.editButton, { backgroundColor: colors.primary }]}
-              onPress={() => router.push('/onboarding/personal-info')}
+              onPress={() => router.push('/onboarding/complete')}
             >
               <Text style={styles.editButtonText}>Set Up Goals</Text>
             </TouchableOpacity>

@@ -1,50 +1,57 @@
 
 import React from 'react';
-import { Stack } from 'expo-router';
-import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+import { Platform } from 'react-native';
+import { Tabs } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 export default function TabLayout() {
-  const tabs: TabBarItem[] = [
-    {
-      name: '(home)',
-      route: '/(tabs)/(home)/',
-      icon: 'home',
-      label: 'Home',
-    },
-    {
-      name: 'diary',
-      route: '/(tabs)/diary',
-      icon: 'restaurant',
-      label: 'Diary',
-    },
-    {
-      name: 'progress',
-      route: '/(tabs)/progress',
-      icon: 'trending_up',
-      label: 'Progress',
-    },
-    {
-      name: 'profile',
-      route: '/(tabs)/profile',
-      icon: 'person',
-      label: 'Profile',
-    },
-  ];
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
-    <>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          animation: 'none',
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: isDark ? colors.textSecondaryDark : colors.textSecondary,
+        tabBarStyle: {
+          backgroundColor: isDark ? colors.cardDark : colors.card,
+          borderTopColor: isDark ? colors.borderDark : colors.border,
+          paddingBottom: Platform.OS === 'ios' ? 20 : 5,
+          height: Platform.OS === 'ios' ? 85 : 60,
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="(home)"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name={focused ? 'house.fill' : 'house'}
+              android_material_icon_name="home"
+              size={28}
+              color={color}
+            />
+          ),
         }}
-      >
-        <Stack.Screen key="home" name="(home)" />
-        <Stack.Screen key="diary" name="diary" />
-        <Stack.Screen key="progress" name="progress" />
-        <Stack.Screen key="profile" name="profile" />
-      </Stack>
-      <FloatingTabBar tabs={tabs} />
-    </>
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name={focused ? 'person.fill' : 'person'}
+              android_material_icon_name="person"
+              size={28}
+              color={color}
+            />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
