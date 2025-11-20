@@ -1,40 +1,115 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { mockUser, mockGoal } from '@/data/mockData';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const user = mockUser;
-  const goal = mockGoal;
+  const [user, setUser] = useState<any>(null);
+  const [goal, setGoal] = useState<any>(null);
+
+  useEffect(() => {
+    loadUserData();
+  }, []);
+
+  const loadUserData = async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+
+      const { data: userData } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      const { data: goalData } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', authUser.id)
+        .eq('is_active', true)
+        .single();
+
+      setUser({ ...authUser, ...userData });
+      setGoal(goalData);
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: async () => {
+            await supabase.auth.signOut();
+            router.replace('/auth/welcome');
+          },
+        },
+      ]
+    );
+  };
 
   const handleResetOnboarding = async () => {
     Alert.alert(
-      'Reset Onboarding',
-      'This will clear your onboarding data and let you set up your goals again.',
+      'Reset Goals',
+      'This will let you set up your goals again.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('onboarding_complete');
-            await AsyncStorage.removeItem('onboarding_data');
-            router.push('/onboarding/welcome');
+            if (user) {
+              await supabase
+                .from('users')
+                .update({ onboarding_completed: false })
+                .eq('id', user.id);
+              
+              router.push('/onboarding/personal-info');
+            }
           },
         },
       ]
     );
   };
+
+  const calculateAge = (dob: string) => {
+    if (!dob) return 'N/A';
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  if (!user) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.loadingContainer}>
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            Loading profile...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -66,58 +141,66 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Your Stats
-          </Text>
-          
-          <View style={styles.statsGrid}>
-            <StatItem label="Height" value={`${user.height} cm`} isDark={isDark} />
-            <StatItem label="Weight" value={`${user.weight} kg`} isDark={isDark} />
-            <StatItem label="Age" value={`${new Date().getFullYear() - new Date(user.dob).getFullYear()} years`} isDark={isDark} />
-            <StatItem label="Sex" value={user.sex === 'male' ? 'Male' : 'Female'} isDark={isDark} />
+        {user.height && user.current_weight && (
+          <View style={[styles.statsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Your Stats
+            </Text>
+            
+            <View style={styles.statsGrid}>
+              <StatItem label="Height" value={`${user.height} cm`} isDark={isDark} />
+              <StatItem label="Weight" value={`${user.current_weight} kg`} isDark={isDark} />
+              {user.date_of_birth && (
+                <StatItem label="Age" value={`${calculateAge(user.date_of_birth)} years`} isDark={isDark} />
+              )}
+              {user.sex && (
+                <StatItem label="Sex" value={user.sex === 'male' ? 'Male' : 'Female'} isDark={isDark} />
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
-        <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Current Goals
-          </Text>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Goal Type
+        {goal && (
+          <View style={[styles.goalsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Current Goals
             </Text>
-            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
-              {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
-            </Text>
-          </View>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Daily Calories
-            </Text>
-            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
-              {goal.daily_calories} kcal
-            </Text>
-          </View>
-          
-          <View style={styles.goalItem}>
-            <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Macros
-            </Text>
-            <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
-              P: {goal.protein_g}g • C: {goal.carbs_g}g • F: {goal.fats_g}g
-            </Text>
-          </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Goal Type
+              </Text>
+              <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+                {goal.goal_type === 'lose' ? 'Lose Weight' : goal.goal_type === 'gain' ? 'Gain Weight' : 'Maintain Weight'}
+              </Text>
+            </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Daily Calories
+              </Text>
+              <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+                {goal.daily_calories} kcal
+              </Text>
+            </View>
+            
+            <View style={styles.goalItem}>
+              <Text style={[styles.goalLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Macros
+              </Text>
+              <Text style={[styles.goalValue, { color: isDark ? colors.textDark : colors.text }]}>
+                P: {goal.protein_g}g • C: {goal.carbs_g}g • F: {goal.fats_g}g
+              </Text>
+            </View>
 
-          <TouchableOpacity
-            style={[styles.editButton, { backgroundColor: colors.primary }]}
-            onPress={handleResetOnboarding}
-          >
-            <Text style={styles.editButtonText}>Edit Goals</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={handleResetOnboarding}
+            >
+              <Text style={styles.editButtonText}>Edit Goals</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         <View style={[styles.settingsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
@@ -174,7 +257,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={[styles.logoutButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: colors.error }]}
-          onPress={() => console.log('Logout')}
+          onPress={handleLogout}
         >
           <Text style={[styles.logoutText, { color: colors.error }]}>
             Log Out
@@ -232,6 +315,14 @@ function SettingItem({ icon, label, value, onPress, isDark }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    ...typography.body,
   },
   header: {
     paddingHorizontal: spacing.md,

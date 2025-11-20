@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -15,6 +15,7 @@ export default function GoalsScreen() {
 
   const [goalType, setGoalType] = useState<GoalType>('lose');
   const [intensity, setIntensity] = useState(1);
+  const [targetWeight, setTargetWeight] = useState('');
 
   const handleContinue = async () => {
     const existingData = await AsyncStorage.getItem('onboarding_data');
@@ -22,9 +23,12 @@ export default function GoalsScreen() {
     
     data.goal_type = goalType;
     data.goal_intensity = intensity;
+    if (targetWeight) {
+      data.target_weight = parseFloat(targetWeight);
+    }
 
     await AsyncStorage.setItem('onboarding_data', JSON.stringify(data));
-    router.push('/onboarding/macros');
+    router.push('/onboarding/activity');
   };
 
   return (
@@ -58,7 +62,7 @@ export default function GoalsScreen() {
           />
           <GoalOption
             icon="📈"
-            label="Gain Weight"
+            label="Gain Muscle"
             description="Build muscle mass"
             selected={goalType === 'gain'}
             onPress={() => setGoalType('gain')}
@@ -67,40 +71,56 @@ export default function GoalsScreen() {
         </View>
 
         {goalType !== 'maintain' && (
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-              Intensity
-            </Text>
-            <View style={styles.intensityContainer}>
-              <IntensityOption
-                label="Mild"
-                value={0.5}
-                selected={intensity === 0.5}
-                onPress={() => setIntensity(0.5)}
-                isDark={isDark}
-              />
-              <IntensityOption
-                label="Moderate"
-                value={1}
-                selected={intensity === 1}
-                onPress={() => setIntensity(1)}
-                isDark={isDark}
-              />
-              <IntensityOption
-                label="Aggressive"
-                value={1.5}
-                selected={intensity === 1.5}
-                onPress={() => setIntensity(1.5)}
-                isDark={isDark}
+          <>
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                Intensity
+              </Text>
+              <View style={styles.intensityContainer}>
+                <IntensityOption
+                  label="Slow"
+                  value={0.5}
+                  selected={intensity === 0.5}
+                  onPress={() => setIntensity(0.5)}
+                  isDark={isDark}
+                />
+                <IntensityOption
+                  label="Moderate"
+                  value={1}
+                  selected={intensity === 1}
+                  onPress={() => setIntensity(1)}
+                  isDark={isDark}
+                />
+                <IntensityOption
+                  label="Aggressive"
+                  value={1.5}
+                  selected={intensity === 1.5}
+                  onPress={() => setIntensity(1.5)}
+                  isDark={isDark}
+                />
+              </View>
+              <Text style={[styles.intensityNote, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {goalType === 'lose' 
+                  ? `${intensity === 0.5 ? '250' : intensity === 1 ? '500' : '750'} calorie deficit per day`
+                  : `${intensity === 0.5 ? '150' : intensity === 1 ? '300' : '450'} calorie surplus per day`
+                }
+              </Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
+                Target Weight (optional)
+              </Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                placeholder="Enter your target weight"
+                placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                keyboardType="decimal-pad"
+                value={targetWeight}
+                onChangeText={setTargetWeight}
               />
             </View>
-            <Text style={[styles.intensityNote, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              {goalType === 'lose' 
-                ? `${intensity === 0.5 ? '250' : intensity === 1 ? '500' : '750'} calorie deficit per day`
-                : `${intensity === 0.5 ? '150' : intensity === 1 ? '300' : '450'} calorie surplus per day`
-              }
-            </Text>
-          </View>
+          </>
         )}
 
         <TouchableOpacity
@@ -237,6 +257,13 @@ const styles = StyleSheet.create({
     ...typography.caption,
     marginTop: spacing.sm,
     textAlign: 'center',
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: 16,
   },
   button: {
     borderRadius: borderRadius.md,

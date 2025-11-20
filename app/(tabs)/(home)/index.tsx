@@ -9,25 +9,54 @@ import ProgressCircle from '@/components/ProgressCircle';
 import MacroBar from '@/components/MacroBar';
 import { mockGoal, mockDailySummary } from '@/data/mockData';
 import { IconSymbol } from '@/components/IconSymbol';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [goal, setGoal] = useState(mockGoal);
+  const [summary, setSummary] = useState(mockDailySummary);
 
   useEffect(() => {
-    checkOnboarding();
+    loadUserGoal();
   }, []);
 
-  const checkOnboarding = async () => {
-    const complete = await AsyncStorage.getItem('onboarding_complete');
-    setOnboardingComplete(complete === 'true');
-  };
+  const loadUserGoal = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
-  const goal = mockGoal;
-  const summary = mockDailySummary;
+      const { data: goalData, error } = await supabase
+        .from('goals')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .single();
+
+      if (error) {
+        console.error('Error loading goal:', error);
+        return;
+      }
+
+      if (goalData) {
+        setGoal({
+          id: goalData.id,
+          user_id: goalData.user_id,
+          goal_type: goalData.goal_type,
+          daily_calories: goalData.daily_calories,
+          protein_g: goalData.protein_g,
+          carbs_g: goalData.carbs_g,
+          fats_g: goalData.fats_g,
+          fiber_g: goalData.fiber_g,
+          is_active: goalData.is_active,
+          created_at: goalData.created_at,
+        });
+      }
+    } catch (error) {
+      console.error('Error in loadUserGoal:', error);
+    }
+  };
 
   const caloriesRemaining = goal.daily_calories - summary.total_calories;
   const streakDays = 7;
@@ -47,14 +76,6 @@ export default function HomeScreen() {
               {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
             </Text>
           </View>
-          {!onboardingComplete && (
-            <TouchableOpacity
-              style={[styles.setupButton, { backgroundColor: colors.accent }]}
-              onPress={() => router.push('/onboarding/welcome')}
-            >
-              <Text style={styles.setupButtonText}>Setup</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
@@ -245,16 +266,6 @@ const styles = StyleSheet.create({
   },
   date: {
     ...typography.h2,
-  },
-  setupButton: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  setupButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
   },
   caloriesCard: {
     borderRadius: borderRadius.lg,

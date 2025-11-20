@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "Elite Macro Tracker",
-    "slug": "elite-macro-tracker",
+    "slug": "Elite Macro Tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/natively-dark.png",
@@ -50,5 +49,6 @@
     "extra": {
       "router": {}
     }
-  }
+  },
+  "scheme": "Elite Macro Tracker"
 }

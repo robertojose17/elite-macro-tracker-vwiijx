@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateGoalFromOnboarding } from '@/utils/calculations';
 import { OnboardingData } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function ResultsScreen() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function ResultsScreen() {
   const isDark = colorScheme === 'dark';
 
   const [results, setResults] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadResults();
@@ -25,19 +27,80 @@ export default function ResultsScreen() {
     if (data) {
       const onboardingData: OnboardingData = JSON.parse(data);
       const calculatedResults = calculateGoalFromOnboarding(onboardingData);
-      setResults(calculatedResults);
+      setResults({ ...calculatedResults, onboardingData });
     }
   };
 
   const handleFinish = async () => {
-    await AsyncStorage.setItem('onboarding_complete', 'true');
-    router.replace('/(tabs)/(home)/');
+    setSaving(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        console.error('No user found');
+        setSaving(false);
+        return;
+      }
+
+      const data = await AsyncStorage.getItem('onboarding_data');
+      if (!data) {
+        console.error('No onboarding data found');
+        setSaving(false);
+        return;
+      }
+
+      const onboardingData: OnboardingData = JSON.parse(data);
+
+      // Deactivate any existing goals
+      await supabase
+        .from('goals')
+        .update({ is_active: false })
+        .eq('user_id', user.id)
+        .eq('is_active', true);
+
+      // Create new goal
+      const { error: goalError } = await supabase
+        .from('goals')
+        .insert({
+          user_id: user.id,
+          goal_type: onboardingData.goal_type || 'maintain',
+          goal_intensity: onboardingData.goal_intensity || 1,
+          daily_calories: results.daily_calories,
+          protein_g: results.protein_g,
+          carbs_g: results.carbs_g,
+          fats_g: results.fats_g,
+          fiber_g: results.fiber_g,
+          is_active: true,
+        });
+
+      if (goalError) {
+        console.error('Goal creation error:', goalError);
+      }
+
+      // Mark onboarding as complete
+      await supabase
+        .from('users')
+        .update({ onboarding_completed: true })
+        .eq('id', user.id);
+
+      // Clear onboarding data
+      await AsyncStorage.removeItem('onboarding_data');
+      await AsyncStorage.setItem('onboarding_complete', 'true');
+
+      router.replace('/(tabs)/(home)/');
+    } catch (error) {
+      console.error('Error saving goal:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!results) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}>
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
             Calculating your personalized plan...
           </Text>
@@ -69,7 +132,7 @@ export default function ResultsScreen() {
             </Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: isDark ? colors.borderDark : colors.border }]} />
 
           <View style={styles.macrosGrid}>
             <MacroResult
@@ -115,10 +178,15 @@ export default function ResultsScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.button, { backgroundColor: colors.primary }]}
+          style={[styles.button, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
           onPress={handleFinish}
+          disabled={saving}
         >
-          <Text style={styles.buttonText}>Start Tracking</Text>
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.buttonText}>Start Tracking</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -151,6 +219,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
   },
   loadingText: {
     ...typography.body,
@@ -193,7 +262,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
     marginBottom: spacing.lg,
   },
   macrosGrid: {
