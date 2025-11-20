@@ -53,9 +53,16 @@ module.exports = {
   },
   overrides: [
     {
-      files: ['metro.config.js'],
+      // Disable TypeScript parser for JavaScript config files
+      files: ['*.js'],
+      parser: 'espree',
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module'
+      },
       rules: {
-        '@typescript-eslint/no-var-requires': 'off'
+        '@typescript-eslint/no-var-requires': 'off',
+        'import/no-unresolved': 'off'
       }
     }
   ]
