@@ -17,7 +17,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { initializeFoodDatabase } from "@/utils/foodDatabase";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/app/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
 
 SplashScreen.preventAutoHideAsync();
@@ -76,6 +76,36 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isReady || initializing) return;
 
+    const checkOnboardingStatus = async () => {
+      if (!session?.user) return;
+
+      try {
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('onboarding_completed')
+          .eq('id', session.user.id)
+          .single();
+
+        if (error) {
+          console.error('Error checking onboarding status:', error);
+          // If user doesn't exist in users table, redirect to onboarding
+          console.log('User not found, redirecting to onboarding');
+          router.replace('/onboarding/personal-info');
+          return;
+        }
+
+        if (userData?.onboarding_completed) {
+          console.log('Onboarding completed, redirecting to home');
+          router.replace('/(tabs)/(home)/');
+        } else {
+          console.log('Onboarding not completed, redirecting to onboarding');
+          router.replace('/onboarding/personal-info');
+        }
+      } catch (error) {
+        console.error('Error in checkOnboardingStatus:', error);
+      }
+    };
+
     const inAuthGroup = segments[0] === 'auth';
     const inOnboardingGroup = segments[0] === 'onboarding';
     const inTabsGroup = segments[0] === '(tabs)';
@@ -98,36 +128,6 @@ export default function RootLayout() {
       checkOnboardingStatus();
     }
   }, [session, segments, isReady, initializing]);
-
-  const checkOnboardingStatus = async () => {
-    if (!session?.user) return;
-
-    try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('onboarding_completed')
-        .eq('id', session.user.id)
-        .single();
-
-      if (error) {
-        console.error('Error checking onboarding status:', error);
-        // If user doesn't exist in users table, redirect to onboarding
-        console.log('User not found, redirecting to onboarding');
-        router.replace('/onboarding/personal-info');
-        return;
-      }
-
-      if (userData?.onboarding_completed) {
-        console.log('Onboarding completed, redirecting to home');
-        router.replace('/(tabs)/(home)/');
-      } else {
-        console.log('Onboarding not completed, redirecting to onboarding');
-        router.replace('/onboarding/personal-info');
-      }
-    } catch (error) {
-      console.error('Error in checkOnboardingStatus:', error);
-    }
-  };
 
   React.useEffect(() => {
     if (

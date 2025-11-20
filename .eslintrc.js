@@ -1,3 +1,4 @@
+
 // https://docs.expo.dev/guides/using-eslint/
 module.exports = {
   extends: [
@@ -15,6 +16,17 @@ module.exports = {
     sourceType: 'module',
     ecmaFeatures: {
       jsx: true
+    }
+  },
+  settings: {
+    'import/resolver': {
+      typescript: {
+        alwaysTryTypes: true,
+        project: './tsconfig.json'
+      },
+      node: {
+        extensions: ['.js', '.jsx', '.ts', '.tsx']
+      }
     }
   },
   ignorePatterns: ['/dist/*', '/public/*', '/babel-plugins/*'],

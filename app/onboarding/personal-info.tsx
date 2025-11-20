@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { Sex } from '@/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function PersonalInfoScreen() {
   const router = useRouter();

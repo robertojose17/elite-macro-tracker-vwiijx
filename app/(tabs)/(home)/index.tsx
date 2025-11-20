@@ -9,7 +9,7 @@ import ProgressCircle from '@/components/ProgressCircle';
 import MacroBar from '@/components/MacroBar';
 import { mockGoal, mockDailySummary } from '@/data/mockData';
 import { IconSymbol } from '@/components/IconSymbol';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function HomeScreen() {
   const router = useRouter();

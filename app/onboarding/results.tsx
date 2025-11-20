@@ -8,7 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { calculateGoalFromOnboarding } from '@/utils/calculations';
 import { OnboardingData } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/app/integrations/supabase/client';
 
 export default function ResultsScreen() {
   const router = useRouter();
