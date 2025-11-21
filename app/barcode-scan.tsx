@@ -43,6 +43,7 @@ export default function BarcodeScanScreen() {
       if (product) {
         console.log('[BarcodeScanner] Product found:', product.product_name);
         setLoading(false);
+        // Navigate to food-details, which will handle dismissing back to diary after save
         router.push({
           pathname: '/food-details',
           params: {
@@ -77,8 +78,8 @@ export default function BarcodeScanScreen() {
   };
 
   const handleAddManually = () => {
-    // Navigate to quick add and ensure we close all intermediate screens
-    router.replace(`/quick-add?meal=${mealType}&date=${date}`);
+    // Navigate to quick add - it will handle dismissing back to diary after save
+    router.push(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   if (!permission) {
