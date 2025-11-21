@@ -47,6 +47,8 @@ export interface Food {
   barcode?: string;
   user_created: boolean;
   is_favorite?: boolean;
+  fdc_id?: number; // FoodData Central ID
+  data_type?: string; // FDC data type: 'Branded', 'Foundation', 'Survey (FNDDS)', 'SR Legacy'
 }
 
 export interface Meal {
@@ -67,7 +69,7 @@ export interface MealItem {
   carbs: number;
   fats: number;
   fiber: number;
-  serving_description?: string; // e.g., "1 egg (50 g)", "2 slices (28 g)", "35 g"
+  serving_description?: string; // e.g., "1 cup (240 g)", "2 slices (28 g)", "35 g"
   grams?: number; // actual grams used for this entry
 }
 

@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
-import { searchProducts, OpenFoodFactsProduct } from '@/utils/openFoodFacts';
+import { searchFoods, FDCFood, extractNutrition } from '@/utils/foodDataCentral';
 
 export default function FoodSearchScreen() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function FoodSearchScreen() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<OpenFoodFactsProduct[]>([]);
+  const [results, setResults] = useState<FDCFood[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [screenLoaded, setScreenLoaded] = useState(false);
 
@@ -69,33 +69,49 @@ export default function FoodSearchScreen() {
     setHasSearched(true);
 
     try {
-      console.log('[FoodSearch] Searching for:', query);
-      const data = await searchProducts(query);
+      console.log('[FoodSearch] Searching FDC for:', query);
+      const data = await searchFoods(query);
       
-      if (data && data.products) {
-        console.log('[FoodSearch] Found', data.products.length, 'products');
-        setResults(data.products);
+      if (data && data.foods) {
+        console.log('[FoodSearch] Found', data.foods.length, 'foods from FDC');
+        
+        // Sort results: Branded first, then Foundation, then others
+        const sortedFoods = [...data.foods].sort((a, b) => {
+          const typeOrder: { [key: string]: number } = {
+            'Branded': 1,
+            'Foundation': 2,
+            'Survey (FNDDS)': 3,
+            'SR Legacy': 4,
+          };
+          
+          const orderA = typeOrder[a.dataType] || 999;
+          const orderB = typeOrder[b.dataType] || 999;
+          
+          return orderA - orderB;
+        });
+        
+        setResults(sortedFoods);
       } else {
         console.log('[FoodSearch] No results found');
         setResults([]);
       }
     } catch (error) {
       console.error('[FoodSearch] Error searching:', error);
-      Alert.alert('Error', 'Failed to search for products. Please try again.');
+      Alert.alert('Error', 'Failed to search FoodData Central. Please try again.');
       setResults([]);
     } finally {
       setSearching(false);
     }
   };
 
-  const handleSelectProduct = (product: OpenFoodFactsProduct) => {
-    console.log('[FoodSearch] Selected product:', product.product_name);
+  const handleSelectFood = (food: FDCFood) => {
+    console.log('[FoodSearch] Selected food:', food.description);
     router.push({
       pathname: '/food-details',
       params: {
         meal: mealType,
         date: date,
-        productData: JSON.stringify(product),
+        fdcData: JSON.stringify(food),
         source: 'search',
       },
     });
@@ -107,7 +123,7 @@ export default function FoodSearchScreen() {
       {screenLoaded && (
         <View style={styles.debugBanner}>
           <Text style={styles.debugText}>
-            ✓ Food Library Screen Loaded ({Platform.OS})
+            ✓ Food Library (FDC) - {Platform.OS}
           </Text>
         </View>
       )}
@@ -166,7 +182,7 @@ export default function FoodSearchScreen() {
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
             <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Searching OpenFoodFacts...
+              Searching FoodData Central (USDA)...
             </Text>
           </View>
         )}
@@ -190,7 +206,7 @@ export default function FoodSearchScreen() {
               Search for food
             </Text>
             <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Start typing to see live results from OpenFoodFacts
+              Start typing to see live results from FoodData Central (USDA)
             </Text>
           </View>
         )}
@@ -200,34 +216,47 @@ export default function FoodSearchScreen() {
             <Text style={[styles.resultsCount, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Found {results.length} results
             </Text>
-            {results.map((product, index) => {
-              const nutriments = product.nutriments || {};
-              const calories = nutriments['energy-kcal_100g'] || 0;
-              const protein = nutriments['proteins_100g'] || 0;
-              const carbs = nutriments['carbohydrates_100g'] || 0;
-              const fats = nutriments['fat_100g'] || 0;
-
+            {results.map((food, index) => {
+              const nutrition = extractNutrition(food);
+              const brandText = food.brandOwner || food.brandName || '';
+              
               return (
                 <React.Fragment key={index}>
                   <TouchableOpacity
                     style={[styles.resultCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-                    onPress={() => handleSelectProduct(product)}
+                    onPress={() => handleSelectFood(food)}
                   >
                     <View style={styles.resultContent}>
-                      <Text style={[styles.resultName, { color: isDark ? colors.textDark : colors.text }]}>
-                        {product.product_name || 'Unknown Product'}
-                      </Text>
-                      {product.brands && (
+                      <View style={styles.resultHeader}>
+                        <Text style={[styles.resultName, { color: isDark ? colors.textDark : colors.text }]}>
+                          {food.description || 'Unknown Product'}
+                        </Text>
+                        <View style={[styles.dataTypeBadge, { 
+                          backgroundColor: food.dataType === 'Branded' ? colors.primary : 
+                                         food.dataType === 'Foundation' ? colors.success : 
+                                         colors.textSecondary 
+                        }]}>
+                          <Text style={styles.dataTypeBadgeText}>
+                            {food.dataType === 'Branded' ? 'BRANDED' : 
+                             food.dataType === 'Foundation' ? 'FOUNDATION' : 
+                             food.dataType.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      
+                      {brandText && (
                         <Text style={[styles.resultBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                          {product.brands}
+                          {brandText}
                         </Text>
                       )}
+                      
                       <Text style={[styles.resultNutrition, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                        Per 100g: {Math.round(calories)} kcal • P: {Math.round(protein)}g • C: {Math.round(carbs)}g • F: {Math.round(fats)}g
+                        Per 100g: {Math.round(nutrition.calories)} kcal • P: {Math.round(nutrition.protein)}g • C: {Math.round(nutrition.carbs)}g • F: {Math.round(nutrition.fat)}g
                       </Text>
-                      {product.serving_size && (
+                      
+                      {food.householdServingFullText && (
                         <Text style={[styles.resultServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                          Serving: {product.serving_size}
+                          Serving: {food.householdServingFullText}
                         </Text>
                       )}
                     </View>
@@ -344,10 +373,27 @@ const styles = StyleSheet.create({
   resultContent: {
     flex: 1,
   },
+  resultHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+    gap: spacing.sm,
+  },
   resultName: {
     ...typography.bodyBold,
     fontSize: 16,
-    marginBottom: 4,
+    flex: 1,
+  },
+  dataTypeBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  dataTypeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
   },
   resultBrand: {
     ...typography.caption,

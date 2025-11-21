@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
-import { OpenFoodFactsProduct, mapOpenFoodFactsToFood, extractServingSize, ServingSizeInfo } from '@/utils/openFoodFacts';
+import { FDCFood, extractServingSize, extractNutrition, ServingSizeInfo } from '@/utils/foodDataCentral';
 
 export default function FoodDetailsScreen() {
   const router = useRouter();
@@ -17,39 +17,44 @@ export default function FoodDetailsScreen() {
 
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || new Date().toISOString().split('T')[0];
-  const productDataString = params.productData as string;
+  const fdcDataString = params.fdcData as string;
   const source = (params.source as string) || 'search';
 
-  const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
+  const [food, setFood] = useState<FDCFood | null>(null);
   const [servingInfo, setServingInfo] = useState<ServingSizeInfo | null>(null);
+  const [nutrition, setNutrition] = useState<any>(null);
   const [grams, setGrams] = useState('100');
-  const [customServingDescription, setCustomServingDescription] = useState('');
   const [saving, setSaving] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    console.log('[FoodDetails] Component mounted, parsing product data...');
+    console.log('[FoodDetails] Component mounted, parsing FDC data...');
     
-    if (productDataString) {
+    if (fdcDataString) {
       try {
-        const parsed = JSON.parse(productDataString);
-        console.log('[FoodDetails] Product parsed:', parsed.product_name);
-        setProduct(parsed);
+        const parsed = JSON.parse(fdcDataString);
+        console.log('[FoodDetails] FDC food parsed:', parsed.description);
+        console.log('[FoodDetails] Data type:', parsed.dataType);
+        setFood(parsed);
         
-        // Extract serving size information from OpenFoodFacts
+        // Extract serving size information from FDC
         // This function NEVER throws and always returns a valid ServingSizeInfo
         const serving = extractServingSize(parsed);
         console.log('[FoodDetails] Extracted serving info:', serving);
         
         setServingInfo(serving);
         setGrams(serving.grams.toString());
-        setCustomServingDescription(serving.description);
+        
+        // Extract nutrition information
+        const nutritionData = extractNutrition(parsed);
+        console.log('[FoodDetails] Extracted nutrition:', nutritionData);
+        setNutrition(nutritionData);
         
         // Mark as ready immediately - never block the UI
         setIsReady(true);
         console.log('[FoodDetails] Screen ready to display');
       } catch (error) {
-        console.error('[FoodDetails] Error parsing product data:', error);
+        console.error('[FoodDetails] Error parsing FDC data:', error);
         
         // Even on error, show something to the user
         Alert.alert(
@@ -60,24 +65,26 @@ export default function FoodDetailsScreen() {
               text: 'OK',
               onPress: () => {
                 // Set minimal defaults so user can still interact
-                setProduct({
-                  code: '',
-                  product_name: 'Unknown Product',
-                  brands: '',
-                  serving_size: '100 g',
-                  nutriments: {
-                    'energy-kcal_100g': 0,
-                    'proteins_100g': 0,
-                    'carbohydrates_100g': 0,
-                    'fat_100g': 0,
-                    'fiber_100g': 0,
-                  },
-                });
+                setFood({
+                  fdcId: 0,
+                  description: 'Unknown Product',
+                  dataType: 'Unknown',
+                  servingSize: 100,
+                  servingSizeUnit: 'g',
+                } as FDCFood);
                 setServingInfo({
                   description: '100 g',
                   grams: 100,
                   displayText: '100 g (no serving size provided)',
                   hasValidGrams: false,
+                });
+                setNutrition({
+                  calories: 0,
+                  protein: 0,
+                  carbs: 0,
+                  fat: 0,
+                  fiber: 0,
+                  sugars: 0,
                 });
                 setGrams('100');
                 setIsReady(true);
@@ -87,7 +94,7 @@ export default function FoodDetailsScreen() {
         );
       }
     } else {
-      console.error('[FoodDetails] No product data provided');
+      console.error('[FoodDetails] No FDC data provided');
       Alert.alert('Error', 'No product data available', [
         {
           text: 'OK',
@@ -95,10 +102,10 @@ export default function FoodDetailsScreen() {
         },
       ]);
     }
-  }, [productDataString]);
+  }, [fdcDataString]);
 
   // Show loading only briefly while parsing
-  if (!isReady || !product || !servingInfo) {
+  if (!isReady || !food || !servingInfo || !nutrition) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
@@ -111,22 +118,15 @@ export default function FoodDetailsScreen() {
     );
   }
 
-  const nutriments = product.nutriments || {};
-  const per100gCalories = nutriments['energy-kcal_100g'] || 0;
-  const per100gProtein = nutriments['proteins_100g'] || 0;
-  const per100gCarbs = nutriments['carbohydrates_100g'] || 0;
-  const per100gFats = nutriments['fat_100g'] || 0;
-  const per100gFiber = nutriments['fiber_100g'] || 0;
-
-  // Calculate for the specified grams
+  // Calculate nutrition for the specified grams
   const gramsNum = parseFloat(grams) || servingInfo.grams;
   const multiplier = gramsNum / 100;
   
-  const calculatedCalories = per100gCalories * multiplier;
-  const calculatedProtein = per100gProtein * multiplier;
-  const calculatedCarbs = per100gCarbs * multiplier;
-  const calculatedFats = per100gFats * multiplier;
-  const calculatedFiber = per100gFiber * multiplier;
+  const calculatedCalories = nutrition.calories * multiplier;
+  const calculatedProtein = nutrition.protein * multiplier;
+  const calculatedCarbs = nutrition.carbs * multiplier;
+  const calculatedFats = nutrition.fat * multiplier;
+  const calculatedFiber = nutrition.fiber * multiplier;
 
   // Generate serving description for display
   const getServingDescription = (): string => {
@@ -139,7 +139,7 @@ export default function FoodDetailsScreen() {
     
     // If the original serving had a unit description (not just grams)
     if (servingInfo.description !== servingInfo.displayText && !servingInfo.description.match(/^\d+\s*g$/i)) {
-      // Try to scale the serving (e.g., "1 egg" -> "2 eggs", "2 slices" -> "3 slices")
+      // Try to scale the serving (e.g., "1 cup" -> "2 cups", "2 slices" -> "3 slices")
       const match = servingInfo.description.match(/^(\d+\.?\d*)\s+(.+)$/);
       if (match) {
         const originalCount = parseFloat(match[1]);
@@ -179,14 +179,14 @@ export default function FoodDetailsScreen() {
 
       console.log('[FoodDetails] Starting save process for meal:', mealType, 'date:', date);
 
-      // Check if this food already exists in our database (by barcode)
+      // Check if this food already exists in our database (by FDC ID)
       let foodId: string | null = null;
 
-      if (product.code) {
+      if (food.fdcId) {
         const { data: existingFood } = await supabase
           .from('foods')
           .select('id')
-          .eq('barcode', product.code)
+          .eq('fdc_id', food.fdcId)
           .maybeSingle();
 
         if (existingFood) {
@@ -197,21 +197,22 @@ export default function FoodDetailsScreen() {
 
       // If food doesn't exist, create it
       if (!foodId) {
-        const foodData = mapOpenFoodFactsToFood(product);
         const { data: newFood, error: foodError } = await supabase
           .from('foods')
           .insert({
-            name: foodData.name,
-            brand: foodData.brand,
-            serving_amount: 100, // OpenFoodFacts uses per 100g
+            name: food.description,
+            brand: food.brandOwner || food.brandName || null,
+            serving_amount: 100, // FDC uses per 100g for calculations
             serving_unit: 'g',
-            calories: per100gCalories,
-            protein: per100gProtein,
-            carbs: per100gCarbs,
-            fats: per100gFats,
-            fiber: per100gFiber,
-            barcode: product.code,
+            calories: nutrition.calories,
+            protein: nutrition.protein,
+            carbs: nutrition.carbs,
+            fats: nutrition.fat,
+            fiber: nutrition.fiber,
+            barcode: food.gtinUpc || null,
             user_created: false,
+            fdc_id: food.fdcId,
+            data_type: food.dataType,
           })
           .select()
           .single();
@@ -333,34 +334,48 @@ export default function FoodDetailsScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+            <View style={styles.fdcBadgeContainer}>
+              <Text style={[styles.fdcBadge, { color: colors.primary }]}>
+                ✓ FoodData Central (USDA)
+              </Text>
+              <Text style={[styles.dataType, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {food.dataType}
+              </Text>
+            </View>
+            
             <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-              {product.product_name || 'Unknown Product'}
+              {food.description || 'Unknown Product'}
             </Text>
-            {product.brands && (
+            
+            {(food.brandOwner || food.brandName) && (
               <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {product.brands}
+                {food.brandOwner || food.brandName}
               </Text>
             )}
-            {product.serving_size && (
-              <View style={styles.servingSizeInfo}>
-                <Text style={[styles.servingSizeLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Label serving size:
+            
+            <View style={styles.servingSizeInfo}>
+              <Text style={[styles.servingSizeLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Label serving size:
+              </Text>
+              <Text style={[styles.servingSize, { color: colors.primary }]}>
+                {servingInfo.displayText}
+              </Text>
+              {!servingInfo.hasValidGrams && (
+                <Text style={[styles.servingWarning, { color: colors.warning || '#FF9500' }]}>
+                  ⚠️ No gram value found - using 100g for calculations
                 </Text>
-                <Text style={[styles.servingSize, { color: colors.primary }]}>
-                  {servingInfo.displayText}
-                </Text>
-                {!servingInfo.hasValidGrams && (
-                  <Text style={[styles.servingWarning, { color: colors.warning || '#FF9500' }]}>
-                    ⚠️ No gram value found - using 100g for calculations
-                  </Text>
-                )}
-              </View>
-            )}
-            {product.code && (
+              )}
+            </View>
+            
+            {food.gtinUpc && (
               <Text style={[styles.barcode, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Barcode: {product.code}
+                UPC: {food.gtinUpc}
               </Text>
             )}
+            
+            <Text style={[styles.fdcId, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              FDC ID: {food.fdcId}
+            </Text>
           </View>
 
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
@@ -396,6 +411,7 @@ export default function FoodDetailsScreen() {
                 <Text style={[styles.unitLabel, { color: isDark ? colors.textDark : colors.text }]}>g</Text>
               </View>
             </View>
+            
             <View style={styles.quickButtons}>
               <TouchableOpacity
                 style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
@@ -432,61 +448,71 @@ export default function FoodDetailsScreen() {
               For {Math.round(gramsNum)}g
             </Text>
 
-            <View style={styles.nutritionGrid}>
-              <View style={styles.nutritionItem}>
-                <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Calories
-                </Text>
-                <Text style={[styles.nutritionValue, { color: colors.calories }]}>
-                  {Math.round(calculatedCalories)} kcal
+            {nutrition.calories === 0 && nutrition.protein === 0 && nutrition.carbs === 0 && nutrition.fat === 0 ? (
+              <View style={styles.noNutritionContainer}>
+                <Text style={[styles.noNutritionText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  ⚠️ No nutrient data available for this food
                 </Text>
               </View>
+            ) : (
+              <>
+                <View style={styles.nutritionGrid}>
+                  <View style={styles.nutritionItem}>
+                    <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Calories
+                    </Text>
+                    <Text style={[styles.nutritionValue, { color: colors.calories }]}>
+                      {Math.round(calculatedCalories)} kcal
+                    </Text>
+                  </View>
 
-              <View style={styles.nutritionItem}>
-                <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Protein
-                </Text>
-                <Text style={[styles.nutritionValue, { color: colors.protein }]}>
-                  {calculatedProtein.toFixed(1)}g
-                </Text>
-              </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Protein
+                    </Text>
+                    <Text style={[styles.nutritionValue, { color: colors.protein }]}>
+                      {calculatedProtein.toFixed(1)}g
+                    </Text>
+                  </View>
 
-              <View style={styles.nutritionItem}>
-                <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Carbs
-                </Text>
-                <Text style={[styles.nutritionValue, { color: colors.carbs }]}>
-                  {calculatedCarbs.toFixed(1)}g
-                </Text>
-              </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Carbs
+                    </Text>
+                    <Text style={[styles.nutritionValue, { color: colors.carbs }]}>
+                      {calculatedCarbs.toFixed(1)}g
+                    </Text>
+                  </View>
 
-              <View style={styles.nutritionItem}>
-                <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Fats
-                </Text>
-                <Text style={[styles.nutritionValue, { color: colors.fats }]}>
-                  {calculatedFats.toFixed(1)}g
-                </Text>
-              </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Fats
+                    </Text>
+                    <Text style={[styles.nutritionValue, { color: colors.fats }]}>
+                      {calculatedFats.toFixed(1)}g
+                    </Text>
+                  </View>
 
-              <View style={styles.nutritionItem}>
-                <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  Fiber
-                </Text>
-                <Text style={[styles.nutritionValue, { color: colors.fiber }]}>
-                  {calculatedFiber.toFixed(1)}g
-                </Text>
-              </View>
-            </View>
+                  <View style={styles.nutritionItem}>
+                    <Text style={[styles.nutritionLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                      Fiber
+                    </Text>
+                    <Text style={[styles.nutritionValue, { color: colors.fiber }]}>
+                      {calculatedFiber.toFixed(1)}g
+                    </Text>
+                  </View>
+                </View>
 
-            <View style={styles.per100gInfo}>
-              <Text style={[styles.per100gTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Per 100g:
-              </Text>
-              <Text style={[styles.per100gText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                {Math.round(per100gCalories)} kcal • P: {per100gProtein.toFixed(1)}g • C: {per100gCarbs.toFixed(1)}g • F: {per100gFats.toFixed(1)}g
-              </Text>
-            </View>
+                <View style={styles.per100gInfo}>
+                  <Text style={[styles.per100gTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Per 100g:
+                  </Text>
+                  <Text style={[styles.per100gText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    {Math.round(nutrition.calories)} kcal • P: {nutrition.protein.toFixed(1)}g • C: {nutrition.carbs.toFixed(1)}g • F: {nutrition.fat.toFixed(1)}g
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
 
           <TouchableOpacity
@@ -551,6 +577,21 @@ const styles = StyleSheet.create({
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
+  fdcBadgeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  fdcBadge: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dataType: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
   foodName: {
     ...typography.h2,
     marginBottom: spacing.xs,
@@ -576,6 +617,11 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   barcode: {
+    ...typography.caption,
+    fontStyle: 'italic',
+    marginBottom: 2,
+  },
+  fdcId: {
     ...typography.caption,
     fontStyle: 'italic',
   },
@@ -646,6 +692,14 @@ const styles = StyleSheet.create({
     ...typography.caption,
     marginBottom: spacing.md,
     fontStyle: 'italic',
+  },
+  noNutritionContainer: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  noNutritionText: {
+    ...typography.body,
+    textAlign: 'center',
   },
   nutritionGrid: {
     gap: spacing.md,

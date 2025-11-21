@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { fetchProductByBarcode } from '@/utils/openFoodFacts';
+import { searchByBarcode } from '@/utils/foodDataCentral';
 
 type ScanState = 'scanning' | 'loading' | 'not-found';
 
@@ -43,7 +43,7 @@ export default function BarcodeScanScreen() {
     setScanState('loading');
 
     console.log('[BarcodeScanner] Scanned barcode:', data);
-    console.log('[BarcodeScanner] Camera stopped, fetching product...');
+    console.log('[BarcodeScanner] Camera stopped, fetching product from FDC...');
 
     try {
       // Fetch product with a timeout to prevent infinite loading
@@ -51,12 +51,13 @@ export default function BarcodeScanScreen() {
         setTimeout(() => reject(new Error('Request timeout')), 10000)
       );
       
-      const fetchPromise = fetchProductByBarcode(data);
+      const fetchPromise = searchByBarcode(data);
       
-      const product = await Promise.race([fetchPromise, timeoutPromise]) as any;
+      const food = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
-      if (product) {
-        console.log('[BarcodeScanner] Product found:', product.product_name);
+      if (food) {
+        console.log('[BarcodeScanner] Food found from FDC:', food.description);
+        console.log('[BarcodeScanner] Data type:', food.dataType);
         console.log('[BarcodeScanner] Navigating directly to food-details (NOT diary)');
         
         // Navigate directly to food-details
@@ -66,12 +67,12 @@ export default function BarcodeScanScreen() {
           params: {
             meal: mealType,
             date: date,
-            productData: JSON.stringify(product),
+            fdcData: JSON.stringify(food),
             source: 'barcode',
           },
         });
       } else {
-        console.log('[BarcodeScanner] Product not found');
+        console.log('[BarcodeScanner] Food not found in FDC');
         setScanState('not-found');
       }
     } catch (error) {
@@ -80,7 +81,7 @@ export default function BarcodeScanScreen() {
       // Show error but allow retry
       Alert.alert(
         'Error',
-        'Failed to fetch product information. Please try again.',
+        'Failed to fetch product information from FoodData Central. Please try again.',
         [
           {
             text: 'Try Again',
@@ -189,7 +190,7 @@ export default function BarcodeScanScreen() {
             Food not found in database
           </Text>
           <Text style={[styles.notFoundSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            This product is not available in the OpenFoodFacts database
+            This product is not available in the FoodData Central database
           </Text>
           {scannedBarcode && (
             <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -255,7 +256,7 @@ export default function BarcodeScanScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
-            Looking up product...
+            Looking up product in FoodData Central...
           </Text>
           {scannedBarcode && (
             <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -306,6 +307,9 @@ export default function BarcodeScanScreen() {
             </View>
             <Text style={styles.instructionText}>
               Position barcode within the frame
+            </Text>
+            <Text style={styles.fdcBadge}>
+              Powered by FoodData Central (USDA)
             </Text>
           </View>
         </SafeAreaView>
@@ -492,6 +496,18 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.75)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
+  },
+  fdcBadge: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    opacity: 0.8,
   },
   loadingText: {
     fontSize: 18,
