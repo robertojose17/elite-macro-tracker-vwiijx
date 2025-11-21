@@ -21,6 +21,7 @@ export default function BarcodeScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [notFoundVisible, setNotFoundVisible] = useState(false);
 
   useEffect(() => {
     if (permission && !permission.granted) {
@@ -41,49 +42,42 @@ export default function BarcodeScanScreen() {
 
       if (product) {
         console.log('[BarcodeScanner] Product found:', product.product_name);
-        router.replace({
+        setLoading(false);
+        router.push({
           pathname: '/food-details',
           params: {
             meal: mealType,
             date: date,
             productData: JSON.stringify(product),
+            source: 'barcode',
           },
         });
       } else {
         console.log('[BarcodeScanner] Product not found');
-        Alert.alert(
-          'Product Not Found',
-          'This barcode was not found in the OpenFoodFacts database. Would you like to add it manually?',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-              onPress: () => {
-                setScanned(false);
-                setLoading(false);
-              },
-            },
-            {
-              text: 'Add Manually',
-              onPress: () => {
-                router.replace(`/quick-add?meal=${mealType}&date=${date}`);
-              },
-            },
-          ]
-        );
+        setLoading(false);
+        setNotFoundVisible(true);
       }
     } catch (error) {
       console.error('[BarcodeScanner] Error fetching product:', error);
+      setLoading(false);
       Alert.alert('Error', 'Failed to fetch product information. Please try again.', [
         {
           text: 'OK',
           onPress: () => {
             setScanned(false);
-            setLoading(false);
           },
         },
       ]);
     }
+  };
+
+  const handleTryAgain = () => {
+    setScanned(false);
+    setNotFoundVisible(false);
+  };
+
+  const handleAddManually = () => {
+    router.push(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   if (!permission) {
@@ -133,6 +127,69 @@ export default function BarcodeScanScreen() {
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (notFoundVisible) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow_back"
+              size={24}
+              color={isDark ? colors.textDark : colors.text}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+            Scan Barcode
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.notFoundContainer}>
+          <Text style={styles.notFoundIcon}>🔍</Text>
+          <Text style={[styles.notFoundTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Food not found in database
+          </Text>
+          <Text style={[styles.notFoundSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            This product is not available in the OpenFoodFacts database
+          </Text>
+
+          <View style={styles.notFoundButtons}>
+            <TouchableOpacity
+              style={[styles.notFoundButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderWidth: 1, borderColor: isDark ? colors.borderDark : colors.border }]}
+              onPress={handleTryAgain}
+            >
+              <IconSymbol
+                ios_icon_name="camera"
+                android_material_icon_name="camera_alt"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={[styles.notFoundButtonText, { color: isDark ? colors.textDark : colors.text }]}>
+                Try Another Barcode
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.notFoundButton, { backgroundColor: colors.primary }]}
+              onPress={handleAddManually}
+            >
+              <IconSymbol
+                ios_icon_name="edit"
+                android_material_icon_name="edit"
+                size={24}
+                color="#FFFFFF"
+              />
+              <Text style={[styles.notFoundButtonText, { color: '#FFFFFF' }]}>
+                Add Manually
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -241,6 +298,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     fontSize: 16,
+  },
+  notFoundContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  notFoundIcon: {
+    fontSize: 80,
+    marginBottom: spacing.lg,
+  },
+  notFoundTitle: {
+    ...typography.h2,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  notFoundSubtext: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.xxl,
+  },
+  notFoundButtons: {
+    width: '100%',
+    gap: spacing.md,
+  },
+  notFoundButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    gap: spacing.sm,
+  },
+  notFoundButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   cameraContainer: {
     flex: 1,

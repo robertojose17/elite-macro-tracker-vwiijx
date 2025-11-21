@@ -18,6 +18,7 @@ export default function FoodDetailsScreen() {
   const mealType = (params.meal as string) || 'breakfast';
   const date = (params.date as string) || new Date().toISOString().split('T')[0];
   const productDataString = params.productData as string;
+  const source = (params.source as string) || 'search';
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
   const [servings, setServings] = useState('1');
@@ -178,10 +179,17 @@ export default function FoodDetailsScreen() {
       }
 
       console.log('[FoodDetails] Food added successfully');
+      
+      // Navigate back to diary
+      // Use router.back() multiple times to get back to the diary
+      // This ensures we go back through the navigation stack properly
       Alert.alert('Success', 'Food added to your diary!', [
         {
           text: 'OK',
-          onPress: () => router.push('/(tabs)/(home)/'),
+          onPress: () => {
+            // Navigate back to home/diary
+            router.push('/(tabs)/(home)/');
+          },
         },
       ]);
     } catch (error) {
@@ -225,6 +233,11 @@ export default function FoodDetailsScreen() {
             {product.brands && (
               <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 {product.brands}
+              </Text>
+            )}
+            {product.code && (
+              <Text style={[styles.barcode, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Barcode: {product.code}
               </Text>
             )}
           </View>
@@ -368,6 +381,11 @@ const styles = StyleSheet.create({
   },
   foodBrand: {
     ...typography.body,
+    marginBottom: spacing.xs,
+  },
+  barcode: {
+    ...typography.caption,
+    fontStyle: 'italic',
   },
   sectionTitle: {
     ...typography.h3,
