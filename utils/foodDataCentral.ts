@@ -2,6 +2,8 @@
 /**
  * FoodData Central (FDC) API Integration
  * USDA's official food database with high-quality nutrition data
+ * 
+ * IMPORTANT: Set FOODDATA_CENTRAL_API_KEY environment variable before using
  */
 
 import Constants from 'expo-constants';
@@ -55,37 +57,101 @@ export interface ServingSizeInfo {
 }
 
 /**
- * Get FDC API key from environment
- * User should set this in their environment variables
+ * Get FDC API key from environment variable
+ * Throws a clear error if the key is missing in development
  */
 function getFDCApiKey(): string {
-  // Try multiple sources for the API key
   let apiKey: string | undefined;
   
-  // 1. Try expo-constants (recommended for Expo)
-  try {
-    apiKey = Constants.expoConfig?.extra?.fdcApiKey;
-  } catch (e) {
-    console.log('[FDC] Could not read from Constants.expoConfig');
+  console.log('[FDC] 🔑 Attempting to load API key...');
+  
+  // Method 1: Try process.env.FOODDATA_CENTRAL_API_KEY (recommended for Expo)
+  if (typeof process !== 'undefined' && process.env) {
+    apiKey = process.env.FOODDATA_CENTRAL_API_KEY;
+    if (apiKey) {
+      console.log('[FDC] ✓ API key loaded from process.env.FOODDATA_CENTRAL_API_KEY');
+    }
   }
   
-  // 2. Try process.env (for web/Node environments)
+  // Method 2: Try EXPO_PUBLIC_ prefixed version (for Expo SDK 49+)
   if (!apiKey && typeof process !== 'undefined' && process.env) {
-    apiKey = process.env.EXPO_PUBLIC_FDC_API_KEY || process.env.FDC_API_KEY;
+    apiKey = process.env.EXPO_PUBLIC_FOODDATA_CENTRAL_API_KEY;
+    if (apiKey) {
+      console.log('[FDC] ✓ API key loaded from process.env.EXPO_PUBLIC_FOODDATA_CENTRAL_API_KEY');
+    }
   }
   
-  // 3. Try global environment (for some bundlers)
-  if (!apiKey && typeof global !== 'undefined' && (global as any).EXPO_PUBLIC_FDC_API_KEY) {
-    apiKey = (global as any).EXPO_PUBLIC_FDC_API_KEY;
-  }
-  
+  // Method 3: Try expo-constants extra config
   if (!apiKey) {
-    console.warn('[FDC] ⚠️ No API key found. Using DEMO_KEY with limited requests.');
-    console.warn('[FDC] To fix: Add fdcApiKey to app.json extra config or set EXPO_PUBLIC_FDC_API_KEY');
-    return 'DEMO_KEY';
+    try {
+      apiKey = Constants.expoConfig?.extra?.fooddataCentralApiKey;
+      if (apiKey) {
+        console.log('[FDC] ✓ API key loaded from Constants.expoConfig.extra.fooddataCentralApiKey');
+      }
+    } catch (e) {
+      console.log('[FDC] Could not read from Constants.expoConfig');
+    }
   }
   
-  console.log('[FDC] ✓ API key loaded successfully');
+  // Method 4: Try manifest2 (for older Expo versions)
+  if (!apiKey) {
+    try {
+      apiKey = Constants.manifest2?.extra?.expoClient?.extra?.fooddataCentralApiKey;
+      if (apiKey) {
+        console.log('[FDC] ✓ API key loaded from Constants.manifest2');
+      }
+    } catch (e) {
+      console.log('[FDC] Could not read from Constants.manifest2');
+    }
+  }
+  
+  // Validate the API key
+  if (!apiKey || apiKey === 'DEMO_KEY' || apiKey.trim() === '') {
+    const errorMessage = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ FoodData Central API Key Not Configured
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The FOODDATA_CENTRAL_API_KEY environment variable is missing or invalid.
+
+To fix this:
+
+1. Get your API key from: https://fdc.nal.usda.gov/api-key-signup.html
+
+2. Set the environment variable:
+   
+   For Expo:
+   - Add to app.json:
+     "extra": {
+       "fooddataCentralApiKey": "YOUR_API_KEY_HERE"
+     }
+   
+   OR use .env file (recommended):
+   - Create a .env file in the project root
+   - Add: FOODDATA_CENTRAL_API_KEY=YOUR_API_KEY_HERE
+   - Restart the dev server
+
+3. Restart your development server after setting the key
+
+Current value: ${apiKey || 'undefined'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    `.trim();
+    
+    console.error(errorMessage);
+    
+    // In development, throw an error to make it obvious
+    if (__DEV__) {
+      throw new Error('FoodData Central API key is not configured. Check console for details.');
+    }
+    
+    // In production, return empty string (will cause API errors but won't crash)
+    return '';
+  }
+  
+  console.log('[FDC] ✓ API key validated successfully');
+  console.log(`[FDC] Key preview: ${apiKey.substring(0, 8)}...${apiKey.substring(apiKey.length - 4)}`);
+  
   return apiKey;
 }
 
@@ -265,20 +331,28 @@ export function extractNutrition(food: FDCFood): {
 
 /**
  * Search foods by text query from FoodData Central
+ * Uses the configured API key from environment variable
  * NEVER throws errors - always returns null on failure
  */
 export async function searchFoods(
   query: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 25
 ): Promise<FDCSearchResult | null> {
   const apiKey = getFDCApiKey();
   
+  if (!apiKey) {
+    console.error('[FDC] ❌ Cannot search: API key not configured');
+    return null;
+  }
+  
   console.log(`[FDC] 🔍 Searching foods: "${query}"`);
   console.log(`[FDC] 📱 Platform: ${typeof navigator !== 'undefined' ? 'mobile/web' : 'native'}`);
-  console.log(`[FDC] 🔑 API Key: ${apiKey.substring(0, 8)}...`);
+  console.log(`[FDC] 🔑 Using API key: ${apiKey.substring(0, 8)}...`);
 
   try {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(apiKey)}`;
+    
     const requestBody = {
       query: query,
       dataType: ['Branded', 'Foundation', 'Survey (FNDDS)'],
@@ -286,13 +360,13 @@ export async function searchFoods(
       pageNumber: page,
       sortBy: 'dataType.keyword',
       sortOrder: 'asc',
-      api_key: apiKey,
     };
 
     console.log('[FDC] 📤 Sending request to FDC API...');
+    console.log('[FDC] URL:', url.replace(apiKey, '***'));
     console.log('[FDC] Request body:', JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -306,6 +380,12 @@ export async function searchFoods(
       const errorText = await response.text();
       console.error(`[FDC] ❌ Search failed with status: ${response.status}`);
       console.error(`[FDC] Error response:`, errorText);
+      
+      // Check for authentication errors
+      if (response.status === 401 || response.status === 403) {
+        console.error('[FDC] 🔐 Authentication error: API key is invalid or misconfigured');
+      }
+      
       return null;
     }
 
@@ -331,16 +411,22 @@ export async function searchFoods(
 
 /**
  * Fetch food details by FDC ID
+ * Uses the configured API key from environment variable
  * NEVER throws errors - always returns null on failure
  */
 export async function fetchFoodById(fdcId: number): Promise<FDCFood | null> {
   const apiKey = getFDCApiKey();
   
+  if (!apiKey) {
+    console.error('[FDC] ❌ Cannot fetch food: API key not configured');
+    return null;
+  }
+  
   console.log(`[FDC] 🔍 Fetching food by ID: ${fdcId}`);
 
   try {
-    const url = `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${apiKey}`;
-    console.log('[FDC] 📤 Request URL:', url);
+    const url = `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${encodeURIComponent(apiKey)}`;
+    console.log('[FDC] 📤 Request URL:', url.replace(apiKey, '***'));
 
     const response = await fetch(url);
 
@@ -350,6 +436,12 @@ export async function fetchFoodById(fdcId: number): Promise<FDCFood | null> {
       const errorText = await response.text();
       console.error(`[FDC] ❌ Food not found for ID: ${fdcId}`);
       console.error(`[FDC] Error response:`, errorText);
+      
+      // Check for authentication errors
+      if (response.status === 401 || response.status === 403) {
+        console.error('[FDC] 🔐 Authentication error: API key is invalid or misconfigured');
+      }
+      
       return null;
     }
 
@@ -369,29 +461,37 @@ export async function fetchFoodById(fdcId: number): Promise<FDCFood | null> {
  * Search foods by barcode (UPC/GTIN)
  * Uses the search endpoint with the barcode as query
  * Prioritizes branded foods
+ * Uses the configured API key from environment variable
  * NEVER throws errors - always returns null on failure
  */
 export async function searchByBarcode(barcode: string): Promise<FDCFood | null> {
   const apiKey = getFDCApiKey();
   
+  if (!apiKey) {
+    console.error('[FDC] ❌ Cannot search barcode: API key not configured');
+    return null;
+  }
+  
   console.log(`[FDC] 📷 Searching by barcode: ${barcode}`);
   console.log(`[FDC] 📱 Platform: ${typeof navigator !== 'undefined' ? 'mobile/web' : 'native'}`);
-  console.log(`[FDC] 🔑 API Key: ${apiKey.substring(0, 8)}...`);
+  console.log(`[FDC] 🔑 Using API key: ${apiKey.substring(0, 8)}...`);
 
   try {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(apiKey)}`;
+    
     // Search using the barcode as query
     const requestBody = {
       query: barcode,
       dataType: ['Branded'],
       pageSize: 10,
       pageNumber: 1,
-      api_key: apiKey,
     };
 
     console.log('[FDC] 📤 Sending barcode request to FDC API...');
+    console.log('[FDC] URL:', url.replace(apiKey, '***'));
     console.log('[FDC] Request body:', JSON.stringify(requestBody, null, 2));
 
-    const response = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -405,6 +505,12 @@ export async function searchByBarcode(barcode: string): Promise<FDCFood | null> 
       const errorText = await response.text();
       console.error(`[FDC] ❌ Barcode search failed with status: ${response.status}`);
       console.error(`[FDC] Error response:`, errorText);
+      
+      // Check for authentication errors
+      if (response.status === 401 || response.status === 403) {
+        console.error('[FDC] 🔐 Authentication error: API key is invalid or misconfigured');
+      }
+      
       return null;
     }
 
@@ -418,7 +524,8 @@ export async function searchByBarcode(barcode: string): Promise<FDCFood | null> 
       console.log(`[FDC] Trying foundation foods as fallback...`);
       
       // Try searching foundation foods as fallback
-      const foundationResponse = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
+      const foundationUrl = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(apiKey)}`;
+      const foundationResponse = await fetch(foundationUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -428,7 +535,6 @@ export async function searchByBarcode(barcode: string): Promise<FDCFood | null> 
           dataType: ['Foundation', 'Survey (FNDDS)'],
           pageSize: 10,
           pageNumber: 1,
-          api_key: apiKey,
         }),
       });
 
@@ -479,7 +585,7 @@ export function mapFDCToFood(food: FDCFood): any {
   return {
     name: food.description || 'Unknown Product',
     brand: food.brandOwner || food.brandName || undefined,
-    serving_amount: serving.grams,
+    serving_amount: 100, // FDC uses per 100g for calculations
     serving_unit: 'g',
     calories: nutrition.calories,
     protein: nutrition.protein,

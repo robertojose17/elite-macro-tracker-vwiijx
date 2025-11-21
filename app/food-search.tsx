@@ -23,6 +23,7 @@ export default function FoodSearchScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [screenLoaded, setScreenLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'auth' | 'network' | 'unknown' | null>(null);
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -46,6 +47,7 @@ export default function FoodSearchScreen() {
       setResults([]);
       setHasSearched(false);
       setErrorMessage(null);
+      setErrorType(null);
       return;
     }
 
@@ -70,6 +72,7 @@ export default function FoodSearchScreen() {
     setSearching(true);
     setHasSearched(true);
     setErrorMessage(null);
+    setErrorType(null);
 
     try {
       console.log('[FoodSearch] 🔍 Searching FDC for:', query);
@@ -79,7 +82,11 @@ export default function FoodSearchScreen() {
       
       if (data === null) {
         console.error('[FoodSearch] ❌ Search returned null (API error)');
-        setErrorMessage('Failed to connect to FoodData Central. Please check your internet connection and API key configuration.');
+        
+        // Try to determine error type from console logs
+        // In a real scenario, we'd return error info from searchFoods
+        setErrorType('network');
+        setErrorMessage('Failed to connect to FoodData Central. This could be due to:\n\n• Invalid or missing API key\n• Network connection issues\n• FDC service temporarily unavailable\n\nPlease check the console logs for details.');
         setResults([]);
       } else if (data.foods && data.foods.length > 0) {
         console.log('[FoodSearch] ✅ Found', data.foods.length, 'foods from FDC');
@@ -101,14 +108,25 @@ export default function FoodSearchScreen() {
         
         setResults(sortedFoods);
         setErrorMessage(null);
+        setErrorType(null);
       } else {
         console.log('[FoodSearch] ⚠️ No results found for query:', query);
         setResults([]);
         setErrorMessage(null);
+        setErrorType(null);
       }
     } catch (error) {
       console.error('[FoodSearch] ❌ Error searching:', error);
-      setErrorMessage('An unexpected error occurred. Please try again.');
+      
+      // Check if it's an API key configuration error
+      if (error instanceof Error && error.message.includes('API key')) {
+        setErrorType('auth');
+        setErrorMessage('FDC API key invalid or misconfigured.\n\nPlease set the FOODDATA_CENTRAL_API_KEY environment variable and restart the app.');
+      } else {
+        setErrorType('unknown');
+        setErrorMessage('An unexpected error occurred. Please try again.');
+      }
+      
       setResults([]);
     } finally {
       setSearching(false);
@@ -164,7 +182,7 @@ export default function FoodSearchScreen() {
           />
           <TextInput
             style={[styles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
-            placeholder="Start typing to search (e.g., chicken)"
+            placeholder="Start typing to search (e.g., egg, chicken)"
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -203,9 +221,11 @@ export default function FoodSearchScreen() {
 
         {errorMessage && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.errorIcon}>
+              {errorType === 'auth' ? '🔐' : '⚠️'}
+            </Text>
             <Text style={[styles.errorTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Connection Error
+              {errorType === 'auth' ? 'API Key Error' : 'Connection Error'}
             </Text>
             <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               {errorMessage}
@@ -391,6 +411,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     textAlign: 'center',
     marginBottom: spacing.lg,
+    lineHeight: 22,
   },
   retryButton: {
     paddingHorizontal: spacing.xl,

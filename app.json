@@ -49,7 +49,7 @@
     },
     "extra": {
       "router": {},
-      "fdcApiKey": "DEMO_KEY"
+      "fooddataCentralApiKey": "${FOODDATA_CENTRAL_API_KEY}"
     }
   },
   "scheme": "Elite Macro Tracker"

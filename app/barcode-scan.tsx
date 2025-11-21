@@ -81,7 +81,21 @@ export default function BarcodeScanScreen() {
     } catch (error) {
       console.error('[BarcodeScanner] ❌ Error fetching product:', error);
       
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      let errorMsg = 'Unknown error';
+      
+      if (error instanceof Error) {
+        errorMsg = error.message;
+        
+        // Check if it's an API key error
+        if (errorMsg.includes('API key')) {
+          errorMsg = 'FDC API key invalid or misconfigured.\n\nPlease set the FOODDATA_CENTRAL_API_KEY environment variable and restart the app.';
+        } else if (errorMsg.includes('timeout')) {
+          errorMsg = 'Request timed out. Please check your internet connection and try again.';
+        } else {
+          errorMsg = 'Temporary connection error. Please try again.';
+        }
+      }
+      
       setErrorMessage(errorMsg);
       setScanState('error');
     }
@@ -154,6 +168,8 @@ export default function BarcodeScanScreen() {
 
   // Show error screen
   if (scanState === 'error') {
+    const isAuthError = errorMessage.includes('API key');
+    
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.header}>
@@ -172,12 +188,12 @@ export default function BarcodeScanScreen() {
         </View>
 
         <View style={styles.notFoundContainer}>
-          <Text style={styles.notFoundIcon}>⚠️</Text>
+          <Text style={styles.notFoundIcon}>{isAuthError ? '🔐' : '⚠️'}</Text>
           <Text style={[styles.notFoundTitle, { color: isDark ? colors.textDark : colors.text }]}>
-            Connection Error
+            {isAuthError ? 'API Key Error' : 'Connection Error'}
           </Text>
           <Text style={[styles.notFoundSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-            {errorMessage || 'Failed to connect to FoodData Central'}
+            {errorMessage}
           </Text>
           {scannedBarcode && (
             <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -475,6 +491,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     textAlign: 'center',
     marginBottom: spacing.md,
+    lineHeight: 22,
   },
   barcodeText: {
     ...typography.caption,
