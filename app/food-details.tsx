@@ -189,10 +189,18 @@ export default function FoodDetailsScreen() {
         return;
       }
 
-      console.log('[FoodDetails] Food added successfully');
+      console.log('[FoodDetails] Food added successfully, dismissing all screens and returning to diary');
       
-      // Navigate back to diary
+      // Navigate back to the home screen and dismiss all intermediate screens
+      // Using replace with the home route to clear the navigation stack
       router.replace('/(tabs)/(home)/');
+      
+      // Alternative approach: dismiss back to home
+      // This ensures all intermediate screens (food-details, food-search/barcode-scan, add-food) are closed
+      setTimeout(() => {
+        // Give the replace a moment to process, then ensure we're back at home
+        router.dismissTo('/(tabs)/(home)/');
+      }, 100);
     } catch (error) {
       console.error('[FoodDetails] Error in handleSave:', error);
       Alert.alert('Error', 'An unexpected error occurred');

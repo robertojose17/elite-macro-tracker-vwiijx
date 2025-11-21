@@ -77,7 +77,8 @@ export default function BarcodeScanScreen() {
   };
 
   const handleAddManually = () => {
-    router.push(`/quick-add?meal=${mealType}&date=${date}`);
+    // Navigate to quick add and ensure we close all intermediate screens
+    router.replace(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   if (!permission) {
