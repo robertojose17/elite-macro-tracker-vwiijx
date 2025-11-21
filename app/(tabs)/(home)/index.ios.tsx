@@ -10,20 +10,29 @@ import MacroBar from '@/components/MacroBar';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
 
+type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+interface MealData {
+  type: MealType;
+  label: string;
+  items: any[];
+  totalCalories: number;
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
   const [goal, setGoal] = useState<any>(null);
-  const [summary, setSummary] = useState<any>({
-    total_calories: 0,
-    total_protein: 0,
-    total_carbs: 0,
-    total_fats: 0,
-    total_fiber: 0,
-  });
-  const [foodItems, setFoodItems] = useState<any[]>([]);
+  const [meals, setMeals] = useState<MealData[]>([
+    { type: 'breakfast', label: 'Breakfast', items: [], totalCalories: 0 },
+    { type: 'lunch', label: 'Lunch', items: [], totalCalories: 0 },
+    { type: 'dinner', label: 'Dinner', items: [], totalCalories: 0 },
+    { type: 'snack', label: 'Snacks', items: [], totalCalories: 0 },
+  ]);
+  const [totalCalories, setTotalCalories] = useState(0);
+  const [totalMacros, setTotalMacros] = useState({ protein: 0, carbs: 0, fats: 0, fiber: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -90,6 +99,8 @@ export default function HomeScreen() {
               id,
               name,
               brand,
+              serving_amount,
+              serving_unit,
               user_created
             )
           )
@@ -102,38 +113,66 @@ export default function HomeScreen() {
       } else {
         console.log('[Home iOS] Meals loaded:', mealsData);
         
-        // Flatten meal items for display
-        const items: any[] = [];
-        let totals = {
-          total_calories: 0,
-          total_protein: 0,
-          total_carbs: 0,
-          total_fats: 0,
-          total_fiber: 0,
+        // Organize meals by type
+        const mealsByType: Record<MealType, any[]> = {
+          breakfast: [],
+          lunch: [],
+          dinner: [],
+          snack: [],
         };
+
+        let totalCals = 0;
+        let totalP = 0;
+        let totalC = 0;
+        let totalF = 0;
+        let totalFib = 0;
 
         if (mealsData && mealsData.length > 0) {
           mealsData.forEach((meal: any) => {
             if (meal.meal_items) {
               meal.meal_items.forEach((item: any) => {
-                items.push({
-                  ...item,
-                  meal_type: meal.meal_type,
-                });
-                totals.total_calories += item.calories || 0;
-                totals.total_protein += item.protein || 0;
-                totals.total_carbs += item.carbs || 0;
-                totals.total_fats += item.fats || 0;
-                totals.total_fiber += item.fiber || 0;
+                mealsByType[meal.meal_type as MealType].push(item);
+                totalCals += item.calories || 0;
+                totalP += item.protein || 0;
+                totalC += item.carbs || 0;
+                totalF += item.fats || 0;
+                totalFib += item.fiber || 0;
               });
             }
           });
         }
 
-        console.log('[Home iOS] Food items:', items.length);
-        console.log('[Home iOS] Totals:', totals);
-        setFoodItems(items);
-        setSummary(totals);
+        // Update meals state
+        const updatedMeals: MealData[] = [
+          { 
+            type: 'breakfast', 
+            label: 'Breakfast', 
+            items: mealsByType.breakfast,
+            totalCalories: mealsByType.breakfast.reduce((sum, item) => sum + (item.calories || 0), 0)
+          },
+          { 
+            type: 'lunch', 
+            label: 'Lunch', 
+            items: mealsByType.lunch,
+            totalCalories: mealsByType.lunch.reduce((sum, item) => sum + (item.calories || 0), 0)
+          },
+          { 
+            type: 'dinner', 
+            label: 'Dinner', 
+            items: mealsByType.dinner,
+            totalCalories: mealsByType.dinner.reduce((sum, item) => sum + (item.calories || 0), 0)
+          },
+          { 
+            type: 'snack', 
+            label: 'Snacks', 
+            items: mealsByType.snack,
+            totalCalories: mealsByType.snack.reduce((sum, item) => sum + (item.calories || 0), 0)
+          },
+        ];
+
+        setMeals(updatedMeals);
+        setTotalCalories(totalCals);
+        setTotalMacros({ protein: totalP, carbs: totalC, fats: totalF, fiber: totalFib });
       }
     } catch (error) {
       console.error('[Home iOS] Error in loadData:', error);
@@ -148,10 +187,10 @@ export default function HomeScreen() {
     loadData();
   };
 
-  const handleAddFood = () => {
-    console.log('[Home iOS] Opening add food screen');
+  const handleAddFood = (mealType: MealType) => {
+    console.log('[Home iOS] Opening add food for meal:', mealType);
     const dateString = selectedDate.toISOString().split('T')[0];
-    router.push(`/add-food-simple?date=${dateString}`);
+    router.push(`/add-food?meal=${mealType}&date=${dateString}`);
   };
 
   const handleEditFood = (item: any) => {
@@ -235,7 +274,7 @@ export default function HomeScreen() {
     );
   }
 
-  const caloriesRemaining = (goal?.daily_calories || 2000) - summary.total_calories;
+  const caloriesRemaining = (goal?.daily_calories || 2000) - totalCalories;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -285,6 +324,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Calorie Summary Card */}
         <View style={[styles.caloriesCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Calories
@@ -292,7 +332,7 @@ export default function HomeScreen() {
           
           <View style={styles.caloriesContent}>
             <ProgressCircle
-              current={summary.total_calories}
+              current={totalCalories}
               target={goal?.daily_calories || 2000}
               size={140}
               strokeWidth={12}
@@ -303,7 +343,7 @@ export default function HomeScreen() {
             <View style={styles.caloriesStats}>
               <StatItem
                 label="Consumed"
-                value={Math.round(summary.total_calories)}
+                value={Math.round(totalCalories)}
                 unit="kcal"
                 color={colors.calories}
                 isDark={isDark}
@@ -326,6 +366,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Macros Card */}
         <View style={[styles.macrosCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
           <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
             Macronutrients
@@ -334,99 +375,119 @@ export default function HomeScreen() {
           <View style={styles.macrosContent}>
             <MacroBar
               label="Protein"
-              current={summary.total_protein}
+              current={totalMacros.protein}
               target={goal?.protein_g || 150}
               color={colors.protein}
             />
             <MacroBar
               label="Carbs"
-              current={summary.total_carbs}
+              current={totalMacros.carbs}
               target={goal?.carbs_g || 200}
               color={colors.carbs}
             />
             <MacroBar
               label="Fats"
-              current={summary.total_fats}
+              current={totalMacros.fats}
               target={goal?.fats_g || 65}
               color={colors.fats}
             />
             <MacroBar
               label="Fiber"
-              current={summary.total_fiber}
+              current={totalMacros.fiber}
               target={goal?.fiber_g || 30}
               color={colors.fiber}
             />
           </View>
         </View>
 
-        <View style={[styles.foodsCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
-          <View style={styles.foodsHeader}>
-            <Text style={[styles.cardTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Foods
-            </Text>
-            <TouchableOpacity
-              style={[styles.addButton, { backgroundColor: colors.primary }]}
-              onPress={handleAddFood}
-            >
-              <IconSymbol
-                ios_icon_name="add"
-                android_material_icon_name="add"
-                size={20}
-                color="#FFFFFF"
-              />
-              <Text style={styles.addButtonText}>Add Food</Text>
-            </TouchableOpacity>
-          </View>
+        {/* Meals */}
+        {meals.map((meal, index) => (
+          <React.Fragment key={index}>
+            <View style={[styles.mealCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+              <View style={styles.mealHeader}>
+                <View>
+                  <Text style={[styles.mealTitle, { color: isDark ? colors.textDark : colors.text }]}>
+                    {meal.label}
+                  </Text>
+                  <Text style={[styles.mealCalories, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    {Math.round(meal.totalCalories)} kcal
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.addMealButton}
+                  onPress={() => handleAddFood(meal.type)}
+                >
+                  <IconSymbol
+                    ios_icon_name="add.circle"
+                    android_material_icon_name="add_circle"
+                    size={28}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
 
-          {foodItems.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🍽️</Text>
-              <Text style={[styles.emptyText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                No foods logged for this date
-              </Text>
-              <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Tap &quot;Add Food&quot; to start tracking
-              </Text>
+              {meal.items.length === 0 ? (
+                <TouchableOpacity 
+                  style={styles.emptyMeal}
+                  onPress={() => handleAddFood(meal.type)}
+                >
+                  <Text style={[styles.emptyMealText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                    Tap to add food
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.mealItems}>
+                  {meal.items.map((item, itemIndex) => (
+                    <React.Fragment key={itemIndex}>
+                      <TouchableOpacity 
+                        style={styles.foodItem}
+                        onPress={() => handleEditFood(item)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.foodInfo}>
+                          <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
+                            {item.foods?.name || 'Unknown Food'}
+                          </Text>
+                          {item.foods?.brand && (
+                            <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              {item.foods.brand}
+                            </Text>
+                          )}
+                          <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                            {item.quantity > 1 ? `${item.quantity}x ` : ''}{item.foods?.serving_amount || 1} {item.foods?.serving_unit || 'serving'}
+                          </Text>
+                        </View>
+                        <View style={styles.foodActions}>
+                          <View style={styles.foodCalories}>
+                            <Text style={[styles.foodCaloriesValue, { color: isDark ? colors.textDark : colors.text }]}>
+                              {Math.round(item.calories)}
+                            </Text>
+                            <Text style={[styles.foodCaloriesLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                              kcal
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.deleteButton}
+                            onPress={() => handleDeleteFood(item)}
+                          >
+                            <IconSymbol
+                              ios_icon_name="trash"
+                              android_material_icon_name="delete"
+                              size={20}
+                              color={colors.error}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    </React.Fragment>
+                  ))}
+                </View>
+              )}
             </View>
-          ) : (
-            <View style={styles.foodsList}>
-              {foodItems.map((item, index) => (
-                <React.Fragment key={index}>
-                  <TouchableOpacity 
-                    style={styles.foodItem}
-                    onPress={() => handleEditFood(item)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.foodInfo}>
-                      <Text style={[styles.foodName, { color: isDark ? colors.textDark : colors.text }]}>
-                        {item.foods?.name || 'Unknown Food'}
-                      </Text>
-                      {item.foods?.brand && (
-                        <Text style={[styles.foodBrand, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                          {item.foods.brand}
-                        </Text>
-                      )}
-                      <Text style={[styles.foodMacros, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                        {Math.round(item.calories)} kcal • P: {Math.round(item.protein)}g • C: {Math.round(item.carbs)}g • F: {Math.round(item.fats)}g
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDeleteFood(item)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="trash"
-                        android_material_icon_name="delete"
-                        size={20}
-                        color={colors.error}
-                      />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </React.Fragment>
-              ))}
-            </View>
-          )}
-        </View>
+          </React.Fragment>
+        ))}
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -458,7 +519,6 @@ const styles = StyleSheet.create({
     ...typography.body,
   },
   scrollContent: {
-    paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingHorizontal: spacing.md,
     paddingBottom: 120,
   },
@@ -540,52 +600,46 @@ const styles = StyleSheet.create({
   macrosContent: {
     gap: spacing.md,
   },
-  foodsCard: {
+  mealCard: {
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
     boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.08)',
     elevation: 2,
   },
-  foodsHeader: {
+  mealHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-  },
-  emptyIcon: {
-    fontSize: 48,
     marginBottom: spacing.sm,
   },
-  emptyText: {
-    ...typography.body,
-    marginBottom: spacing.xs,
+  mealTitle: {
+    ...typography.h3,
   },
-  emptySubtext: {
+  mealCalories: {
     ...typography.caption,
+    marginTop: 2,
   },
-  foodsList: {
+  addMealButton: {
+    padding: spacing.xs,
+  },
+  emptyMeal: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    borderStyle: 'dashed',
+  },
+  emptyMealText: {
+    ...typography.body,
+  },
+  mealItems: {
     gap: spacing.sm,
   },
   foodItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
@@ -602,11 +656,28 @@ const styles = StyleSheet.create({
     ...typography.caption,
     marginBottom: 2,
   },
-  foodMacros: {
+  foodDetails: {
+    ...typography.caption,
+  },
+  foodActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  foodCalories: {
+    alignItems: 'flex-end',
+  },
+  foodCaloriesValue: {
+    ...typography.bodyBold,
+    fontSize: 18,
+  },
+  foodCaloriesLabel: {
     ...typography.caption,
   },
   deleteButton: {
     padding: spacing.xs,
-    marginLeft: spacing.sm,
+  },
+  bottomSpacer: {
+    height: 40,
   },
 });
