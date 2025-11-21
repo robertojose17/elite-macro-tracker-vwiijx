@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,8 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { fetchProductByBarcode } from '@/utils/openFoodFacts';
+
+type ScanState = 'scanning' | 'loading' | 'not-found';
 
 export default function BarcodeScanScreen() {
   const router = useRouter();
@@ -19,9 +21,9 @@ export default function BarcodeScanScreen() {
   const date = (params.date as string) || new Date().toISOString().split('T')[0];
 
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [notFoundVisible, setNotFoundVisible] = useState(false);
+  const [scanState, setScanState] = useState<ScanState>('scanning');
+  const [scannedBarcode, setScannedBarcode] = useState<string>('');
+  const hasScannedRef = useRef(false);
 
   useEffect(() => {
     if (permission && !permission.granted) {
@@ -30,21 +32,25 @@ export default function BarcodeScanScreen() {
   }, [permission]);
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
-    if (scanned || loading) return;
+    // Prevent multiple scans
+    if (hasScannedRef.current || scanState !== 'scanning') {
+      return;
+    }
 
-    setScanned(true);
-    setLoading(true);
+    hasScannedRef.current = true;
+    setScannedBarcode(data);
+    setScanState('loading');
 
     console.log('[BarcodeScanner] Scanned barcode:', data);
+    console.log('[BarcodeScanner] Camera stopped, fetching product...');
 
     try {
       const product = await fetchProductByBarcode(data);
 
       if (product) {
         console.log('[BarcodeScanner] Product found:', product.product_name);
-        setLoading(false);
-        // Navigate to food-details, which will handle dismissing back to diary after save
-        router.push({
+        // Navigate to food-details with replace to close this screen
+        router.replace({
           pathname: '/food-details',
           params: {
             meal: mealType,
@@ -55,17 +61,16 @@ export default function BarcodeScanScreen() {
         });
       } else {
         console.log('[BarcodeScanner] Product not found');
-        setLoading(false);
-        setNotFoundVisible(true);
+        setScanState('not-found');
       }
     } catch (error) {
       console.error('[BarcodeScanner] Error fetching product:', error);
-      setLoading(false);
       Alert.alert('Error', 'Failed to fetch product information. Please try again.', [
         {
           text: 'OK',
           onPress: () => {
-            setScanned(false);
+            hasScannedRef.current = false;
+            setScanState('scanning');
           },
         },
       ]);
@@ -73,13 +78,16 @@ export default function BarcodeScanScreen() {
   };
 
   const handleTryAgain = () => {
-    setScanned(false);
-    setNotFoundVisible(false);
+    console.log('[BarcodeScanner] Restarting scanner');
+    hasScannedRef.current = false;
+    setScannedBarcode('');
+    setScanState('scanning');
   };
 
   const handleAddManually = () => {
-    // Navigate to quick add - it will handle dismissing back to diary after save
-    router.push(`/quick-add?meal=${mealType}&date=${date}`);
+    console.log('[BarcodeScanner] Navigating to quick add');
+    // Use replace to close scanner and go to quick add
+    router.replace(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   if (!permission) {
@@ -134,7 +142,8 @@ export default function BarcodeScanScreen() {
     );
   }
 
-  if (notFoundVisible) {
+  // Show "not found" screen (camera is stopped)
+  if (scanState === 'not-found') {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.header}>
@@ -160,6 +169,11 @@ export default function BarcodeScanScreen() {
           <Text style={[styles.notFoundSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
             This product is not available in the OpenFoodFacts database
           </Text>
+          {scannedBarcode && (
+            <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Barcode: {scannedBarcode}
+            </Text>
+          )}
 
           <View style={styles.notFoundButtons}>
             <TouchableOpacity
@@ -173,7 +187,7 @@ export default function BarcodeScanScreen() {
                 color={colors.primary}
               />
               <Text style={[styles.notFoundButtonText, { color: isDark ? colors.textDark : colors.text }]}>
-                Try Another Barcode
+                Scan Another Barcode
               </Text>
             </TouchableOpacity>
 
@@ -182,7 +196,7 @@ export default function BarcodeScanScreen() {
               onPress={handleAddManually}
             >
               <IconSymbol
-                ios_icon_name="edit"
+                ios_icon_name="pencil"
                 android_material_icon_name="edit"
                 size={24}
                 color="#FFFFFF"
@@ -197,6 +211,41 @@ export default function BarcodeScanScreen() {
     );
   }
 
+  // Show loading screen (camera is stopped)
+  if (scanState === 'loading') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow_back"
+              size={24}
+              color={isDark ? colors.textDark : colors.text}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+            Scan Barcode
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            Looking up product...
+          </Text>
+          {scannedBarcode && (
+            <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Barcode: {scannedBarcode}
+            </Text>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show camera view (scanning state)
   return (
     <View style={styles.fullScreenContainer}>
       <CameraView
@@ -205,7 +254,7 @@ export default function BarcodeScanScreen() {
         barcodeScannerSettings={{
           barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
         }}
-        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+        onBarcodeScanned={handleBarCodeScanned}
       >
         <SafeAreaView style={styles.cameraOverlay} edges={['top']}>
           <View style={styles.headerTransparent}>
@@ -237,13 +286,6 @@ export default function BarcodeScanScreen() {
               Position barcode within the frame
             </Text>
           </View>
-
-          {loading && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#FFFFFF" />
-              <Text style={styles.loadingText}>Looking up product...</Text>
-            </View>
-          )}
         </SafeAreaView>
       </CameraView>
     </View>
@@ -262,6 +304,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
   header: {
     flexDirection: 'row',
@@ -343,7 +386,13 @@ const styles = StyleSheet.create({
   notFoundSubtext: {
     ...typography.body,
     textAlign: 'center',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.md,
+  },
+  barcodeText: {
+    ...typography.caption,
+    textAlign: 'center',
+    marginBottom: spacing.xl,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   notFoundButtons: {
     width: '100%',
@@ -422,20 +471,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   loadingText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
 });
