@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "Elite Macro Tracker",
@@ -47,7 +48,8 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "fdcApiKey": "DEMO_KEY"
     }
   },
   "scheme": "Elite Macro Tracker"

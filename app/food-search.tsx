@@ -22,13 +22,14 @@ export default function FoodSearchScreen() {
   const [results, setResults] = useState<FDCFood[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [screenLoaded, setScreenLoaded] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Confirm screen is mounted
   useEffect(() => {
-    console.log('[FoodSearch] Screen mounted on platform:', Platform.OS);
+    console.log('[FoodSearch] ✓ Screen mounted on platform:', Platform.OS);
     console.log('[FoodSearch] Params:', { mealType, date });
     setScreenLoaded(true);
   }, []);
@@ -44,6 +45,7 @@ export default function FoodSearchScreen() {
     if (!searchQuery.trim()) {
       setResults([]);
       setHasSearched(false);
+      setErrorMessage(null);
       return;
     }
 
@@ -67,13 +69,20 @@ export default function FoodSearchScreen() {
 
     setSearching(true);
     setHasSearched(true);
+    setErrorMessage(null);
 
     try {
-      console.log('[FoodSearch] Searching FDC for:', query);
+      console.log('[FoodSearch] 🔍 Searching FDC for:', query);
+      console.log('[FoodSearch] 📱 Running on:', Platform.OS);
+      
       const data = await searchFoods(query);
       
-      if (data && data.foods) {
-        console.log('[FoodSearch] Found', data.foods.length, 'foods from FDC');
+      if (data === null) {
+        console.error('[FoodSearch] ❌ Search returned null (API error)');
+        setErrorMessage('Failed to connect to FoodData Central. Please check your internet connection and API key configuration.');
+        setResults([]);
+      } else if (data.foods && data.foods.length > 0) {
+        console.log('[FoodSearch] ✅ Found', data.foods.length, 'foods from FDC');
         
         // Sort results: Branded first, then Foundation, then others
         const sortedFoods = [...data.foods].sort((a, b) => {
@@ -91,13 +100,15 @@ export default function FoodSearchScreen() {
         });
         
         setResults(sortedFoods);
+        setErrorMessage(null);
       } else {
-        console.log('[FoodSearch] No results found');
+        console.log('[FoodSearch] ⚠️ No results found for query:', query);
         setResults([]);
+        setErrorMessage(null);
       }
     } catch (error) {
-      console.error('[FoodSearch] Error searching:', error);
-      Alert.alert('Error', 'Failed to search FoodData Central. Please try again.');
+      console.error('[FoodSearch] ❌ Error searching:', error);
+      setErrorMessage('An unexpected error occurred. Please try again.');
       setResults([]);
     } finally {
       setSearching(false);
@@ -184,10 +195,31 @@ export default function FoodSearchScreen() {
             <Text style={[styles.loadingText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Searching FoodData Central (USDA)...
             </Text>
+            <Text style={[styles.loadingSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Platform: {Platform.OS}
+            </Text>
           </View>
         )}
 
-        {!searching && hasSearched && results.length === 0 && (
+        {errorMessage && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={[styles.errorTitle, { color: isDark ? colors.textDark : colors.text }]}>
+              Connection Error
+            </Text>
+            <Text style={[styles.errorText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              {errorMessage}
+            </Text>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.primary }]}
+              onPress={() => performSearch(searchQuery)}
+            >
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!searching && !errorMessage && hasSearched && results.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🔍</Text>
             <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text }]}>
@@ -199,7 +231,7 @@ export default function FoodSearchScreen() {
           </View>
         )}
 
-        {!searching && !hasSearched && (
+        {!searching && !errorMessage && !hasSearched && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyIcon}>🍽️</Text>
             <Text style={[styles.emptyText, { color: isDark ? colors.textDark : colors.text }]}>
@@ -211,7 +243,7 @@ export default function FoodSearchScreen() {
           </View>
         )}
 
-        {!searching && results.length > 0 && (
+        {!searching && !errorMessage && results.length > 0 && (
           <View style={styles.resultsContainer}>
             <Text style={[styles.resultsCount, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Found {results.length} results
@@ -337,6 +369,38 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     marginTop: spacing.md,
+  },
+  loadingSubtext: {
+    ...typography.caption,
+    marginTop: spacing.xs,
+  },
+  errorContainer: {
+    alignItems: 'center',
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  errorIcon: {
+    fontSize: 64,
+    marginBottom: spacing.md,
+  },
+  errorTitle: {
+    ...typography.h3,
+    marginBottom: spacing.sm,
+  },
+  errorText: {
+    ...typography.body,
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  retryButton: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',

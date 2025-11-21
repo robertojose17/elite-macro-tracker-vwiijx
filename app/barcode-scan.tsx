@@ -9,7 +9,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { searchByBarcode } from '@/utils/foodDataCentral';
 
-type ScanState = 'scanning' | 'loading' | 'not-found';
+type ScanState = 'scanning' | 'loading' | 'not-found' | 'error';
 
 export default function BarcodeScanScreen() {
   const router = useRouter();
@@ -23,9 +23,11 @@ export default function BarcodeScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanState, setScanState] = useState<ScanState>('scanning');
   const [scannedBarcode, setScannedBarcode] = useState<string>('');
+  const [errorMessage, setErrorMessage] = useState<string>('');
   const hasScannedRef = useRef(false);
 
   useEffect(() => {
+    console.log('[BarcodeScanner] ✓ Screen mounted on platform:', Platform.OS);
     if (permission && !permission.granted) {
       requestPermission();
     }
@@ -42,13 +44,14 @@ export default function BarcodeScanScreen() {
     setScannedBarcode(data);
     setScanState('loading');
 
-    console.log('[BarcodeScanner] Scanned barcode:', data);
+    console.log('[BarcodeScanner] 📷 Scanned barcode:', data);
+    console.log('[BarcodeScanner] 📱 Platform:', Platform.OS);
     console.log('[BarcodeScanner] Camera stopped, fetching product from FDC...');
 
     try {
       // Fetch product with a timeout to prevent infinite loading
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Request timeout')), 10000)
+        setTimeout(() => reject(new Error('Request timeout after 15 seconds')), 15000)
       );
       
       const fetchPromise = searchByBarcode(data);
@@ -56,7 +59,7 @@ export default function BarcodeScanScreen() {
       const food = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
       if (food) {
-        console.log('[BarcodeScanner] Food found from FDC:', food.description);
+        console.log('[BarcodeScanner] ✅ Food found from FDC:', food.description);
         console.log('[BarcodeScanner] Data type:', food.dataType);
         console.log('[BarcodeScanner] Navigating directly to food-details (NOT diary)');
         
@@ -72,32 +75,15 @@ export default function BarcodeScanScreen() {
           },
         });
       } else {
-        console.log('[BarcodeScanner] Food not found in FDC');
+        console.log('[BarcodeScanner] ⚠️ Food not found in FDC');
         setScanState('not-found');
       }
     } catch (error) {
-      console.error('[BarcodeScanner] Error fetching product:', error);
+      console.error('[BarcodeScanner] ❌ Error fetching product:', error);
       
-      // Show error but allow retry
-      Alert.alert(
-        'Error',
-        'Failed to fetch product information from FoodData Central. Please try again.',
-        [
-          {
-            text: 'Try Again',
-            onPress: () => {
-              hasScannedRef.current = false;
-              setScannedBarcode('');
-              setScanState('scanning');
-            },
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setErrorMessage(errorMsg);
+      setScanState('error');
     }
   };
 
@@ -105,6 +91,7 @@ export default function BarcodeScanScreen() {
     console.log('[BarcodeScanner] Restarting scanner');
     hasScannedRef.current = false;
     setScannedBarcode('');
+    setErrorMessage('');
     setScanState('scanning');
   };
 
@@ -160,6 +147,75 @@ export default function BarcodeScanScreen() {
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error screen
+  if (scanState === 'error') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow_back"
+              size={24}
+              color={isDark ? colors.textDark : colors.text}
+            />
+          </TouchableOpacity>
+          <Text style={[styles.title, { color: isDark ? colors.textDark : colors.text }]}>
+            Scan Barcode
+          </Text>
+          <View style={{ width: 24 }} />
+        </View>
+
+        <View style={styles.notFoundContainer}>
+          <Text style={styles.notFoundIcon}>⚠️</Text>
+          <Text style={[styles.notFoundTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Connection Error
+          </Text>
+          <Text style={[styles.notFoundSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            {errorMessage || 'Failed to connect to FoodData Central'}
+          </Text>
+          {scannedBarcode && (
+            <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+              Barcode: {scannedBarcode}
+            </Text>
+          )}
+
+          <View style={styles.notFoundButtons}>
+            <TouchableOpacity
+              style={[styles.notFoundButton, { backgroundColor: isDark ? colors.cardDark : colors.card, borderWidth: 1, borderColor: isDark ? colors.borderDark : colors.border }]}
+              onPress={handleTryAgain}
+            >
+              <IconSymbol
+                ios_icon_name="camera"
+                android_material_icon_name="camera_alt"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={[styles.notFoundButtonText, { color: isDark ? colors.textDark : colors.text }]}>
+                Try Again
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.notFoundButton, { backgroundColor: colors.primary }]}
+              onPress={handleAddManually}
+            >
+              <IconSymbol
+                ios_icon_name="pencil"
+                android_material_icon_name="edit"
+                size={24}
+                color="#FFFFFF"
+              />
+              <Text style={[styles.notFoundButtonText, { color: '#FFFFFF' }]}>
+                Add Manually
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -258,6 +314,9 @@ export default function BarcodeScanScreen() {
           <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
             Looking up product in FoodData Central...
           </Text>
+          <Text style={[styles.loadingSubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Platform: {Platform.OS}
+          </Text>
           {scannedBarcode && (
             <Text style={[styles.barcodeText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
               Barcode: {scannedBarcode}
@@ -310,6 +369,9 @@ export default function BarcodeScanScreen() {
             </Text>
             <Text style={styles.fdcBadge}>
               Powered by FoodData Central (USDA)
+            </Text>
+            <Text style={styles.platformBadge}>
+              Running on {Platform.OS}
             </Text>
           </View>
         </SafeAreaView>
@@ -509,10 +571,27 @@ const styles = StyleSheet.create({
     textShadowRadius: 3,
     opacity: 0.8,
   },
+  platformBadge: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: spacing.xs,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    opacity: 0.6,
+  },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
     marginTop: spacing.lg,
+    textAlign: 'center',
+  },
+  loadingSubtext: {
+    fontSize: 14,
+    marginTop: spacing.sm,
     textAlign: 'center',
   },
 });

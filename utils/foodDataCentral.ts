@@ -4,6 +4,8 @@
  * USDA's official food database with high-quality nutrition data
  */
 
+import Constants from 'expo-constants';
+
 export interface FDCFood {
   fdcId: number;
   description: string;
@@ -57,15 +59,33 @@ export interface ServingSizeInfo {
  * User should set this in their environment variables
  */
 function getFDCApiKey(): string {
-  // In a real app, this would come from environment variables
-  // For now, we'll use a placeholder that the user needs to replace
-  const apiKey = process.env.EXPO_PUBLIC_FDC_API_KEY || process.env.FDC_API_KEY;
+  // Try multiple sources for the API key
+  let apiKey: string | undefined;
   
-  if (!apiKey) {
-    console.warn('[FDC] No API key found. Please set EXPO_PUBLIC_FDC_API_KEY in your environment variables.');
-    return 'DEMO_KEY'; // FDC provides a demo key with limited requests
+  // 1. Try expo-constants (recommended for Expo)
+  try {
+    apiKey = Constants.expoConfig?.extra?.fdcApiKey;
+  } catch (e) {
+    console.log('[FDC] Could not read from Constants.expoConfig');
   }
   
+  // 2. Try process.env (for web/Node environments)
+  if (!apiKey && typeof process !== 'undefined' && process.env) {
+    apiKey = process.env.EXPO_PUBLIC_FDC_API_KEY || process.env.FDC_API_KEY;
+  }
+  
+  // 3. Try global environment (for some bundlers)
+  if (!apiKey && typeof global !== 'undefined' && (global as any).EXPO_PUBLIC_FDC_API_KEY) {
+    apiKey = (global as any).EXPO_PUBLIC_FDC_API_KEY;
+  }
+  
+  if (!apiKey) {
+    console.warn('[FDC] ⚠️ No API key found. Using DEMO_KEY with limited requests.');
+    console.warn('[FDC] To fix: Add fdcApiKey to app.json extra config or set EXPO_PUBLIC_FDC_API_KEY');
+    return 'DEMO_KEY';
+  }
+  
+  console.log('[FDC] ✓ API key loaded successfully');
   return apiKey;
 }
 
@@ -252,33 +272,46 @@ export async function searchFoods(
   page: number = 1,
   pageSize: number = 20
 ): Promise<FDCSearchResult | null> {
+  const apiKey = getFDCApiKey();
+  
+  console.log(`[FDC] 🔍 Searching foods: "${query}"`);
+  console.log(`[FDC] 📱 Platform: ${typeof navigator !== 'undefined' ? 'mobile/web' : 'native'}`);
+  console.log(`[FDC] 🔑 API Key: ${apiKey.substring(0, 8)}...`);
+
   try {
-    const apiKey = getFDCApiKey();
-    console.log(`[FDC] Searching foods: ${query}`);
+    const requestBody = {
+      query: query,
+      dataType: ['Branded', 'Foundation', 'Survey (FNDDS)'],
+      pageSize: pageSize,
+      pageNumber: page,
+      sortBy: 'dataType.keyword',
+      sortOrder: 'asc',
+      api_key: apiKey,
+    };
+
+    console.log('[FDC] 📤 Sending request to FDC API...');
+    console.log('[FDC] Request body:', JSON.stringify(requestBody, null, 2));
 
     const response = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query: query,
-        dataType: ['Branded', 'Foundation', 'Survey (FNDDS)'],
-        pageSize: pageSize,
-        pageNumber: page,
-        sortBy: 'dataType.keyword',
-        sortOrder: 'asc',
-        api_key: apiKey,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log(`[FDC] 📥 Response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      console.log(`[FDC] Search failed with status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`[FDC] ❌ Search failed with status: ${response.status}`);
+      console.error(`[FDC] Error response:`, errorText);
       return null;
     }
 
     const data = await response.json();
-    console.log(`[FDC] Found ${data.totalHits} foods`);
+    console.log(`[FDC] ✅ Found ${data.totalHits} foods`);
+    console.log(`[FDC] Returned ${data.foods?.length || 0} results in this page`);
 
     return {
       totalHits: data.totalHits || 0,
@@ -287,7 +320,11 @@ export async function searchFoods(
       foods: data.foods || [],
     };
   } catch (error) {
-    console.error('[FDC] Error searching foods:', error);
+    console.error('[FDC] ❌ Error searching foods:', error);
+    if (error instanceof Error) {
+      console.error('[FDC] Error message:', error.message);
+      console.error('[FDC] Error stack:', error.stack);
+    }
     return null;
   }
 }
@@ -297,24 +334,33 @@ export async function searchFoods(
  * NEVER throws errors - always returns null on failure
  */
 export async function fetchFoodById(fdcId: number): Promise<FDCFood | null> {
-  try {
-    const apiKey = getFDCApiKey();
-    console.log(`[FDC] Fetching food by ID: ${fdcId}`);
+  const apiKey = getFDCApiKey();
+  
+  console.log(`[FDC] 🔍 Fetching food by ID: ${fdcId}`);
 
-    const response = await fetch(
-      `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${apiKey}`
-    );
+  try {
+    const url = `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${apiKey}`;
+    console.log('[FDC] 📤 Request URL:', url);
+
+    const response = await fetch(url);
+
+    console.log(`[FDC] 📥 Response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
-      console.log(`[FDC] Food not found for ID: ${fdcId}`);
+      const errorText = await response.text();
+      console.error(`[FDC] ❌ Food not found for ID: ${fdcId}`);
+      console.error(`[FDC] Error response:`, errorText);
       return null;
     }
 
     const data = await response.json();
-    console.log(`[FDC] Food found:`, data.description);
+    console.log(`[FDC] ✅ Food found:`, data.description);
     return data;
   } catch (error) {
-    console.error('[FDC] Error fetching food by ID:', error);
+    console.error('[FDC] ❌ Error fetching food by ID:', error);
+    if (error instanceof Error) {
+      console.error('[FDC] Error message:', error.message);
+    }
     return null;
   }
 }
@@ -326,34 +372,50 @@ export async function fetchFoodById(fdcId: number): Promise<FDCFood | null> {
  * NEVER throws errors - always returns null on failure
  */
 export async function searchByBarcode(barcode: string): Promise<FDCFood | null> {
-  try {
-    const apiKey = getFDCApiKey();
-    console.log(`[FDC] Searching by barcode: ${barcode}`);
+  const apiKey = getFDCApiKey();
+  
+  console.log(`[FDC] 📷 Searching by barcode: ${barcode}`);
+  console.log(`[FDC] 📱 Platform: ${typeof navigator !== 'undefined' ? 'mobile/web' : 'native'}`);
+  console.log(`[FDC] 🔑 API Key: ${apiKey.substring(0, 8)}...`);
 
+  try {
     // Search using the barcode as query
+    const requestBody = {
+      query: barcode,
+      dataType: ['Branded'],
+      pageSize: 10,
+      pageNumber: 1,
+      api_key: apiKey,
+    };
+
+    console.log('[FDC] 📤 Sending barcode request to FDC API...');
+    console.log('[FDC] Request body:', JSON.stringify(requestBody, null, 2));
+
     const response = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        query: barcode,
-        dataType: ['Branded'],
-        pageSize: 10,
-        pageNumber: 1,
-        api_key: apiKey,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
+    console.log(`[FDC] 📥 Response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
-      console.log(`[FDC] Barcode search failed with status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`[FDC] ❌ Barcode search failed with status: ${response.status}`);
+      console.error(`[FDC] Error response:`, errorText);
       return null;
     }
 
     const data = await response.json();
     
+    console.log(`[FDC] Found ${data.totalHits} total hits for barcode`);
+    console.log(`[FDC] Returned ${data.foods?.length || 0} branded foods`);
+    
     if (!data.foods || data.foods.length === 0) {
-      console.log(`[FDC] No foods found for barcode: ${barcode}`);
+      console.log(`[FDC] ⚠️ No branded foods found for barcode: ${barcode}`);
+      console.log(`[FDC] Trying foundation foods as fallback...`);
       
       // Try searching foundation foods as fallback
       const foundationResponse = await fetch('https://api.nal.usda.gov/fdc/v1/foods/search', {
@@ -372,12 +434,15 @@ export async function searchByBarcode(barcode: string): Promise<FDCFood | null> 
 
       if (foundationResponse.ok) {
         const foundationData = await foundationResponse.json();
+        console.log(`[FDC] Foundation search returned ${foundationData.foods?.length || 0} results`);
+        
         if (foundationData.foods && foundationData.foods.length > 0) {
-          console.log(`[FDC] Found foundation food for barcode:`, foundationData.foods[0].description);
+          console.log(`[FDC] ✅ Found foundation food for barcode:`, foundationData.foods[0].description);
           return foundationData.foods[0];
         }
       }
       
+      console.log(`[FDC] ❌ No foods found for barcode: ${barcode}`);
       return null;
     }
 
@@ -386,16 +451,20 @@ export async function searchByBarcode(barcode: string): Promise<FDCFood | null> 
     
     for (const food of data.foods) {
       if (food.gtinUpc === barcode) {
-        console.log(`[FDC] Found exact UPC match:`, food.description);
+        console.log(`[FDC] ✅ Found exact UPC match:`, food.description);
         bestMatch = food;
         break;
       }
     }
 
-    console.log(`[FDC] Returning food:`, bestMatch.description);
+    console.log(`[FDC] ✅ Returning food:`, bestMatch.description);
     return bestMatch;
   } catch (error) {
-    console.error('[FDC] Error searching by barcode:', error);
+    console.error('[FDC] ❌ Error searching by barcode:', error);
+    if (error instanceof Error) {
+      console.error('[FDC] Error message:', error.message);
+      console.error('[FDC] Error stack:', error.stack);
+    }
     return null;
   }
 }
