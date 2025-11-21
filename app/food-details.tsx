@@ -88,6 +88,8 @@ export default function FoodDetailsScreen() {
         return;
       }
 
+      console.log('[FoodDetails] Starting save process for meal:', mealType, 'date:', date);
+
       // Check if this food already exists in our database (by barcode)
       let foodId: string | null = null;
 
@@ -136,7 +138,8 @@ export default function FoodDetailsScreen() {
         console.log('[FoodDetails] Created new food:', foodId);
       }
 
-      // Create or get meal for the date
+      // Find or create meal for the date and meal type
+      // IMPORTANT: We look for existing meal, not replace it
       const { data: existingMeal } = await supabase
         .from('meals')
         .select('id')
@@ -148,6 +151,7 @@ export default function FoodDetailsScreen() {
       let mealId = existingMeal?.id;
 
       if (!mealId) {
+        console.log('[FoodDetails] Creating new meal for', mealType, 'on', date);
         const { data: newMeal, error: mealError } = await supabase
           .from('meals')
           .insert({
@@ -166,9 +170,14 @@ export default function FoodDetailsScreen() {
         }
 
         mealId = newMeal.id;
+        console.log('[FoodDetails] Created new meal:', mealId);
+      } else {
+        console.log('[FoodDetails] Using existing meal:', mealId);
       }
 
-      // Add meal item with calculated values based on grams
+      // ALWAYS INSERT a new meal item (never update existing ones)
+      // This allows multiple foods per meal
+      console.log('[FoodDetails] Inserting NEW meal item (not replacing)');
       const { error: mealItemError } = await supabase
         .from('meal_items')
         .insert({
@@ -189,10 +198,11 @@ export default function FoodDetailsScreen() {
         return;
       }
 
-      console.log('[FoodDetails] Food added successfully, dismissing all screens back to diary');
+      console.log('[FoodDetails] Food added successfully!');
+      console.log('[FoodDetails] Now navigating back to diary (dismissing all intermediate screens)');
       
-      // Dismiss all screens back to the home/diary screen
-      // This will close food-details, food-search/barcode-scan, and add-food in one go
+      // Navigate back to the home/diary screen
+      // This will close food-details and barcode-scan/food-search in one go
       router.dismissTo('/(tabs)/(home)/');
     } catch (error) {
       console.error('[FoodDetails] Error in handleSave:', error);

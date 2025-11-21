@@ -49,8 +49,11 @@ export default function BarcodeScanScreen() {
 
       if (product) {
         console.log('[BarcodeScanner] Product found:', product.product_name);
-        // Navigate to food-details with replace to close this screen
-        router.replace({
+        console.log('[BarcodeScanner] Navigating directly to food-details (NOT diary)');
+        
+        // Navigate directly to food-details with push (not replace)
+        // This ensures the flow is: Scanner -> Food Details -> Diary (after Add)
+        router.push({
           pathname: '/food-details',
           params: {
             meal: mealType,
@@ -86,8 +89,7 @@ export default function BarcodeScanScreen() {
 
   const handleAddManually = () => {
     console.log('[BarcodeScanner] Navigating to quick add');
-    // Use replace to close scanner and go to quick add
-    router.replace(`/quick-add?meal=${mealType}&date=${date}`);
+    router.push(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   if (!permission) {
