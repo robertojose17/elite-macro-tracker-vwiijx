@@ -25,33 +25,87 @@ export default function FoodDetailsScreen() {
   const [grams, setGrams] = useState('100');
   const [customServingDescription, setCustomServingDescription] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
+    console.log('[FoodDetails] Component mounted, parsing product data...');
+    
     if (productDataString) {
       try {
         const parsed = JSON.parse(productDataString);
+        console.log('[FoodDetails] Product parsed:', parsed.product_name);
         setProduct(parsed);
         
         // Extract serving size information from OpenFoodFacts
+        // This function NEVER throws and always returns a valid ServingSizeInfo
         const serving = extractServingSize(parsed);
+        console.log('[FoodDetails] Extracted serving info:', serving);
+        
         setServingInfo(serving);
         setGrams(serving.grams.toString());
         setCustomServingDescription(serving.description);
         
-        console.log('[FoodDetails] Extracted serving info:', serving);
+        // Mark as ready immediately - never block the UI
+        setIsReady(true);
+        console.log('[FoodDetails] Screen ready to display');
       } catch (error) {
         console.error('[FoodDetails] Error parsing product data:', error);
-        Alert.alert('Error', 'Invalid product data');
-        router.back();
+        
+        // Even on error, show something to the user
+        Alert.alert(
+          'Error',
+          'There was an issue loading the product data. Using default values.',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Set minimal defaults so user can still interact
+                setProduct({
+                  code: '',
+                  product_name: 'Unknown Product',
+                  brands: '',
+                  serving_size: '100 g',
+                  nutriments: {
+                    'energy-kcal_100g': 0,
+                    'proteins_100g': 0,
+                    'carbohydrates_100g': 0,
+                    'fat_100g': 0,
+                    'fiber_100g': 0,
+                  },
+                });
+                setServingInfo({
+                  description: '100 g',
+                  grams: 100,
+                  displayText: '100 g (no serving size provided)',
+                  hasValidGrams: false,
+                });
+                setGrams('100');
+                setIsReady(true);
+              },
+            },
+          ]
+        );
       }
+    } else {
+      console.error('[FoodDetails] No product data provided');
+      Alert.alert('Error', 'No product data available', [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
     }
   }, [productDataString]);
 
-  if (!product || !servingInfo) {
+  // Show loading only briefly while parsing
+  if (!isReady || !product || !servingInfo) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: isDark ? colors.textDark : colors.text }]}>
+            Loading product details...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -295,6 +349,11 @@ export default function FoodDetailsScreen() {
                 <Text style={[styles.servingSize, { color: colors.primary }]}>
                   {servingInfo.displayText}
                 </Text>
+                {!servingInfo.hasValidGrams && (
+                  <Text style={[styles.servingWarning, { color: colors.warning || '#FF9500' }]}>
+                    ⚠️ No gram value found - using 100g for calculations
+                  </Text>
+                )}
               </View>
             )}
             {product.code && (
@@ -460,6 +519,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  loadingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -503,6 +569,11 @@ const styles = StyleSheet.create({
   servingSize: {
     ...typography.bodyBold,
     fontSize: 16,
+  },
+  servingWarning: {
+    ...typography.caption,
+    marginTop: spacing.xs,
+    fontStyle: 'italic',
   },
   barcode: {
     ...typography.caption,

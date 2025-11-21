@@ -35,117 +35,170 @@ export interface ServingSizeInfo {
   description: string; // e.g., "1 egg", "2 slices", "1 bar"
   grams: number; // gram equivalent
   displayText: string; // e.g., "1 egg (50 g)", "2 slices (28 g)"
+  hasValidGrams: boolean; // true if grams were successfully parsed, false if using fallback
 }
 
 /**
  * Extract serving size information from OpenFoodFacts product
  * Returns the serving description and gram equivalent
+ * NEVER throws errors or blocks - always returns a valid ServingSizeInfo
  */
 export function extractServingSize(product: OpenFoodFactsProduct): ServingSizeInfo {
+  console.log('[OpenFoodFacts] extractServingSize called with:', {
+    serving_size: product.serving_size,
+    serving_quantity: product.serving_quantity,
+  });
+
   // Default to 100g if no serving info available
   const defaultServing: ServingSizeInfo = {
     description: '100 g',
     grams: 100,
-    displayText: '100 g',
+    displayText: '100 g (no serving size provided)',
+    hasValidGrams: false,
   };
 
-  if (!product.serving_size) {
+  // If no serving_size at all, return default immediately
+  if (!product.serving_size || typeof product.serving_size !== 'string') {
+    console.log('[OpenFoodFacts] No serving_size found, using default 100g');
     return defaultServing;
   }
 
   const servingSize = product.serving_size.trim();
+  
+  // Empty string check
+  if (servingSize.length === 0) {
+    console.log('[OpenFoodFacts] Empty serving_size, using default 100g');
+    return defaultServing;
+  }
+
   console.log('[OpenFoodFacts] Parsing serving size:', servingSize);
 
-  // Try to extract grams from serving_size
-  // Examples:
-  // "1 egg (50g)" -> description: "1 egg", grams: 50
-  // "2 slices (28g)" -> description: "2 slices", grams: 28
-  // "1 bar (40 g)" -> description: "1 bar", grams: 40
-  // "30g" -> description: "30 g", grams: 30
-  // "100 g" -> description: "100 g", grams: 100
+  try {
+    // Try to extract grams from serving_size
+    // Examples:
+    // "1 egg (50g)" -> description: "1 egg", grams: 50
+    // "2 slices (28g)" -> description: "2 slices", grams: 28
+    // "1 bar (40 g)" -> description: "1 bar", grams: 40
+    // "30g" -> description: "30 g", grams: 30
+    // "100 g" -> description: "100 g", grams: 100
 
-  // Pattern 1: "X unit (Yg)" or "X unit (Y g)"
-  const pattern1 = /^(.+?)\s*\((\d+\.?\d*)\s*g\)$/i;
-  const match1 = servingSize.match(pattern1);
-  if (match1) {
-    const description = match1[1].trim();
-    const grams = parseFloat(match1[2]);
-    return {
-      description,
-      grams,
-      displayText: `${description} (${Math.round(grams)} g)`,
-    };
-  }
-
-  // Pattern 2: Just grams "Yg" or "Y g"
-  const pattern2 = /^(\d+\.?\d*)\s*g$/i;
-  const match2 = servingSize.match(pattern2);
-  if (match2) {
-    const grams = parseFloat(match2[1]);
-    return {
-      description: `${Math.round(grams)} g`,
-      grams,
-      displayText: `${Math.round(grams)} g`,
-    };
-  }
-
-  // Pattern 3: "X unit - Yg" or "X unit Yg"
-  const pattern3 = /^(.+?)\s*[-–—]\s*(\d+\.?\d*)\s*g$/i;
-  const match3 = servingSize.match(pattern3);
-  if (match3) {
-    const description = match3[1].trim();
-    const grams = parseFloat(match3[2]);
-    return {
-      description,
-      grams,
-      displayText: `${description} (${Math.round(grams)} g)`,
-    };
-  }
-
-  // Pattern 4: Try to find any number followed by g
-  const pattern4 = /(\d+\.?\d*)\s*g/i;
-  const match4 = servingSize.match(pattern4);
-  if (match4) {
-    const grams = parseFloat(match4[1]);
-    // Try to extract description before the grams
-    const description = servingSize.replace(pattern4, '').trim();
-    if (description) {
-      return {
-        description,
-        grams,
-        displayText: `${description} (${Math.round(grams)} g)`,
-      };
+    // Pattern 1: "X unit (Yg)" or "X unit (Y g)"
+    const pattern1 = /^(.+?)\s*\((\d+\.?\d*)\s*g\)$/i;
+    const match1 = servingSize.match(pattern1);
+    if (match1) {
+      const description = match1[1].trim();
+      const grams = parseFloat(match1[2]);
+      
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] Pattern 1 matched:', { description, grams });
+        return {
+          description,
+          grams,
+          displayText: `${description} (${Math.round(grams)} g)`,
+          hasValidGrams: true,
+        };
+      }
     }
-    return {
-      description: `${Math.round(grams)} g`,
-      grams,
-      displayText: `${Math.round(grams)} g`,
-    };
-  }
 
-  // If we can't parse it, try to use serving_quantity if available
-  if (product.serving_quantity) {
-    const grams = parseFloat(product.serving_quantity);
-    if (!isNaN(grams) && grams > 0) {
-      return {
-        description: servingSize,
-        grams,
-        displayText: `${servingSize} (${Math.round(grams)} g)`,
-      };
+    // Pattern 2: Just grams "Yg" or "Y g"
+    const pattern2 = /^(\d+\.?\d*)\s*g$/i;
+    const match2 = servingSize.match(pattern2);
+    if (match2) {
+      const grams = parseFloat(match2[1]);
+      
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] Pattern 2 matched (pure grams):', grams);
+        return {
+          description: `${Math.round(grams)} g`,
+          grams,
+          displayText: `${Math.round(grams)} g`,
+          hasValidGrams: true,
+        };
+      }
     }
-  }
 
-  // Fallback: return the serving_size as-is with 100g default
-  console.log('[OpenFoodFacts] Could not parse serving size, using default 100g');
-  return {
-    description: servingSize,
-    grams: 100,
-    displayText: `${servingSize} (100 g)`,
-  };
+    // Pattern 3: "X unit - Yg" or "X unit Yg"
+    const pattern3 = /^(.+?)\s*[-–—]\s*(\d+\.?\d*)\s*g$/i;
+    const match3 = servingSize.match(pattern3);
+    if (match3) {
+      const description = match3[1].trim();
+      const grams = parseFloat(match3[2]);
+      
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] Pattern 3 matched:', { description, grams });
+        return {
+          description,
+          grams,
+          displayText: `${description} (${Math.round(grams)} g)`,
+          hasValidGrams: true,
+        };
+      }
+    }
+
+    // Pattern 4: Try to find any number followed by g anywhere in the string
+    const pattern4 = /(\d+\.?\d*)\s*g/i;
+    const match4 = servingSize.match(pattern4);
+    if (match4) {
+      const grams = parseFloat(match4[1]);
+      
+      if (!isNaN(grams) && grams > 0) {
+        // Try to extract description before the grams
+        const description = servingSize.replace(pattern4, '').trim();
+        console.log('[OpenFoodFacts] Pattern 4 matched:', { description, grams });
+        
+        if (description && description.length > 0) {
+          return {
+            description,
+            grams,
+            displayText: `${description} (${Math.round(grams)} g)`,
+            hasValidGrams: true,
+          };
+        }
+        
+        return {
+          description: `${Math.round(grams)} g`,
+          grams,
+          displayText: `${Math.round(grams)} g`,
+          hasValidGrams: true,
+        };
+      }
+    }
+
+    // If we can't parse grams from serving_size, try serving_quantity
+    if (product.serving_quantity) {
+      const quantityStr = String(product.serving_quantity).trim();
+      const grams = parseFloat(quantityStr);
+      
+      if (!isNaN(grams) && grams > 0) {
+        console.log('[OpenFoodFacts] Using serving_quantity:', grams);
+        return {
+          description: servingSize,
+          grams,
+          displayText: `${servingSize} (${Math.round(grams)} g)`,
+          hasValidGrams: true,
+        };
+      }
+    }
+
+    // Fallback: We have a serving description but no parseable grams
+    // Return the description as-is with 100g default for calculations
+    console.log('[OpenFoodFacts] Could not parse grams, using description with 100g fallback');
+    return {
+      description: servingSize,
+      grams: 100,
+      displayText: `${servingSize} (100 g default)`,
+      hasValidGrams: false,
+    };
+  } catch (error) {
+    // If ANY error occurs during parsing, return default
+    console.error('[OpenFoodFacts] Error parsing serving size:', error);
+    return defaultServing;
+  }
 }
 
 /**
  * Fetch product by barcode from OpenFoodFacts
+ * NEVER throws errors - always returns null on failure
  */
 export async function fetchProductByBarcode(barcode: string): Promise<OpenFoodFactsProduct | null> {
   try {

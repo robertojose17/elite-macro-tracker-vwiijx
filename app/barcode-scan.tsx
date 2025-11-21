@@ -34,6 +34,7 @@ export default function BarcodeScanScreen() {
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     // Prevent multiple scans
     if (hasScannedRef.current || scanState !== 'scanning') {
+      console.log('[BarcodeScanner] Ignoring duplicate scan');
       return;
     }
 
@@ -45,14 +46,21 @@ export default function BarcodeScanScreen() {
     console.log('[BarcodeScanner] Camera stopped, fetching product...');
 
     try {
-      const product = await fetchProductByBarcode(data);
+      // Fetch product with a timeout to prevent infinite loading
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Request timeout')), 10000)
+      );
+      
+      const fetchPromise = fetchProductByBarcode(data);
+      
+      const product = await Promise.race([fetchPromise, timeoutPromise]) as any;
 
       if (product) {
         console.log('[BarcodeScanner] Product found:', product.product_name);
         console.log('[BarcodeScanner] Navigating directly to food-details (NOT diary)');
         
-        // Navigate directly to food-details with push (not replace)
-        // This ensures the flow is: Scanner -> Food Details -> Diary (after Add)
+        // Navigate directly to food-details
+        // IMPORTANT: Always navigate, even if serving size is incomplete
         router.push({
           pathname: '/food-details',
           params: {
@@ -68,15 +76,27 @@ export default function BarcodeScanScreen() {
       }
     } catch (error) {
       console.error('[BarcodeScanner] Error fetching product:', error);
-      Alert.alert('Error', 'Failed to fetch product information. Please try again.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            hasScannedRef.current = false;
-            setScanState('scanning');
+      
+      // Show error but allow retry
+      Alert.alert(
+        'Error',
+        'Failed to fetch product information. Please try again.',
+        [
+          {
+            text: 'Try Again',
+            onPress: () => {
+              hasScannedRef.current = false;
+              setScannedBarcode('');
+              setScanState('scanning');
+            },
           },
-        },
-      ]);
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => router.back(),
+          },
+        ]
+      );
     }
   };
 
