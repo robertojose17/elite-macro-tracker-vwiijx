@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,34 +23,57 @@ export default function AddFoodScreen() {
     snack: 'Snacks',
   };
 
+  useEffect(() => {
+    console.log('[AddFood] Screen mounted on platform:', Platform.OS);
+    console.log('[AddFood] Params:', { mealType, date });
+  }, []);
+
+  const handleNavigateToSearch = () => {
+    console.log('[AddFood] Navigating to food-search with params:', { meal: mealType, date });
+    router.push(`/food-search?meal=${mealType}&date=${date}`);
+  };
+
+  const handleNavigateToBarcode = () => {
+    console.log('[AddFood] Navigating to barcode-scan with params:', { meal: mealType, date });
+    router.push(`/barcode-scan?meal=${mealType}&date=${date}`);
+  };
+
+  const handleNavigateToQuickAdd = () => {
+    console.log('[AddFood] Navigating to quick-add with params:', { meal: mealType, date });
+    router.push(`/quick-add?meal=${mealType}&date=${date}`);
+  };
+
   const options = [
     {
       id: 'search',
       title: 'Search Food Library',
       description: 'Search OpenFoodFacts database',
-      icon: 'search',
-      route: `/food-search?meal=${mealType}&date=${date}`,
+      icon: 'magnifyingglass',
+      androidIcon: 'search',
+      onPress: handleNavigateToSearch,
     },
     {
       id: 'barcode',
       title: 'Scan Barcode',
       description: 'Scan product barcode',
-      icon: 'qr_code_scanner',
-      route: `/barcode-scan?meal=${mealType}&date=${date}`,
+      icon: 'qrcode',
+      androidIcon: 'qr_code_scanner',
+      onPress: handleNavigateToBarcode,
     },
     {
       id: 'quick',
       title: 'Quick Add',
       description: 'Manually enter calories & macros',
-      icon: 'edit',
-      route: `/quick-add?meal=${mealType}&date=${date}`,
+      icon: 'pencil',
+      androidIcon: 'edit',
+      onPress: handleNavigateToQuickAdd,
     },
   ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -76,12 +99,13 @@ export default function AddFoodScreen() {
           <React.Fragment key={index}>
             <TouchableOpacity
               style={[styles.optionCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}
-              onPress={() => router.push(option.route as any)}
+              onPress={option.onPress}
+              activeOpacity={0.7}
             >
               <View style={[styles.iconContainer, { backgroundColor: colors.primary + '20' }]}>
                 <IconSymbol
                   ios_icon_name={option.icon}
-                  android_material_icon_name={option.icon}
+                  android_material_icon_name={option.androidIcon}
                   size={28}
                   color={colors.primary}
                 />
@@ -103,6 +127,22 @@ export default function AddFoodScreen() {
             </TouchableOpacity>
           </React.Fragment>
         ))}
+
+        {/* Debug info */}
+        <View style={[styles.debugCard, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
+          <Text style={[styles.debugTitle, { color: isDark ? colors.textDark : colors.text }]}>
+            Debug Info
+          </Text>
+          <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Platform: {Platform.OS}
+          </Text>
+          <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Meal: {mealType}
+          </Text>
+          <Text style={[styles.debugText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+            Date: {date}
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -119,6 +159,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingBottom: spacing.md,
+  },
+  backButton: {
+    padding: spacing.xs,
   },
   title: {
     ...typography.h3,
@@ -160,5 +203,20 @@ const styles = StyleSheet.create({
   },
   optionDescription: {
     ...typography.caption,
+  },
+  debugCard: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginTop: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  debugTitle: {
+    ...typography.bodyBold,
+    marginBottom: spacing.sm,
+  },
+  debugText: {
+    ...typography.caption,
+    marginBottom: 2,
   },
 });

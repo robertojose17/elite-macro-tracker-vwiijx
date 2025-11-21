@@ -21,9 +21,17 @@ export default function FoodSearchScreen() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<OpenFoodFactsProduct[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [screenLoaded, setScreenLoaded] = useState(false);
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Confirm screen is mounted
+  useEffect(() => {
+    console.log('[FoodSearch] Screen mounted on platform:', Platform.OS);
+    console.log('[FoodSearch] Params:', { mealType, date });
+    setScreenLoaded(true);
+  }, []);
 
   // Live search with debounce
   useEffect(() => {
@@ -95,8 +103,17 @@ export default function FoodSearchScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
+      {/* Debug indicator - visible on mobile */}
+      {screenLoaded && (
+        <View style={styles.debugBanner}>
+          <Text style={styles.debugText}>
+            ✓ Food Library Screen Loaded ({Platform.OS})
+          </Text>
+        </View>
+      )}
+
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <IconSymbol
             ios_icon_name="chevron.left"
             android_material_icon_name="arrow_back"
@@ -113,7 +130,7 @@ export default function FoodSearchScreen() {
       <View style={styles.searchContainer}>
         <View style={[styles.searchBar, { backgroundColor: isDark ? colors.cardDark : colors.card, borderColor: isDark ? colors.borderDark : colors.border }]}>
           <IconSymbol
-            ios_icon_name="search"
+            ios_icon_name="magnifyingglass"
             android_material_icon_name="search"
             size={20}
             color={isDark ? colors.textSecondaryDark : colors.textSecondary}
@@ -235,6 +252,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  debugBanner: {
+    backgroundColor: colors.success,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  debugText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -242,6 +270,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingBottom: spacing.md,
+  },
+  backButton: {
+    padding: spacing.xs,
   },
   title: {
     ...typography.h3,
