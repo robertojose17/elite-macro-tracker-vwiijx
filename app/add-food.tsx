@@ -30,17 +30,20 @@ export default function AddFoodScreen() {
 
   const handleNavigateToSearch = () => {
     console.log('[AddFood] Navigating to food-search with params:', { meal: mealType, date });
-    router.push(`/food-search?meal=${mealType}&date=${date}`);
+    // Use replace to dismiss this screen and navigate to search
+    router.replace(`/food-search?meal=${mealType}&date=${date}`);
   };
 
   const handleNavigateToBarcode = () => {
     console.log('[AddFood] Navigating to barcode-scan with params:', { meal: mealType, date });
-    router.push(`/barcode-scan?meal=${mealType}&date=${date}`);
+    // Use replace to dismiss this screen and navigate to barcode
+    router.replace(`/barcode-scan?meal=${mealType}&date=${date}`);
   };
 
   const handleNavigateToQuickAdd = () => {
     console.log('[AddFood] Navigating to quick-add with params:', { meal: mealType, date });
-    router.push(`/quick-add?meal=${mealType}&date=${date}`);
+    // Use replace to dismiss this screen and navigate to quick add
+    router.replace(`/quick-add?meal=${mealType}&date=${date}`);
   };
 
   const options = [
