@@ -93,6 +93,8 @@ export default function HomeScreen() {
             carbs,
             fats,
             fiber,
+            serving_description,
+            grams,
             foods (
               id,
               name,
@@ -258,6 +260,30 @@ export default function HomeScreen() {
   const isToday = () => {
     const today = new Date();
     return selectedDate.toDateString() === today.toDateString();
+  };
+
+  // Helper function to get serving description for display
+  const getServingDisplayText = (item: any): string => {
+    // Priority 1: Use the stored serving_description if available
+    if (item.serving_description) {
+      return item.serving_description;
+    }
+
+    // Priority 2: Use grams if available
+    if (item.grams) {
+      return `${Math.round(item.grams)} g`;
+    }
+
+    // Priority 3: Fallback to quantity * serving_amount
+    const quantity = item.quantity || 1;
+    const servingAmount = item.foods?.serving_amount || 100;
+    const servingUnit = item.foods?.serving_unit || 'g';
+    
+    if (quantity === 1) {
+      return `${servingAmount} ${servingUnit}`;
+    }
+    
+    return `${quantity}x ${servingAmount} ${servingUnit}`;
   };
 
   if (loading) {
@@ -458,7 +484,7 @@ export default function HomeScreen() {
                             </Text>
                           )}
                           <Text style={[styles.foodDetails, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                            {item.quantity > 1 ? `${item.quantity}x ` : ''}{item.foods?.serving_amount || 1} {item.foods?.serving_unit || 'serving'}
+                            {getServingDisplayText(item)}
                           </Text>
                         </View>
                         <View style={styles.foodActions}>

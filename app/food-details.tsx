@@ -7,7 +7,7 @@ import { colors, spacing, borderRadius, typography } from '@/styles/commonStyles
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { IconSymbol } from '@/components/IconSymbol';
 import { supabase } from '@/app/integrations/supabase/client';
-import { OpenFoodFactsProduct, mapOpenFoodFactsToFood } from '@/utils/openFoodFacts';
+import { OpenFoodFactsProduct, mapOpenFoodFactsToFood, extractServingSize, ServingSizeInfo } from '@/utils/openFoodFacts';
 
 export default function FoodDetailsScreen() {
   const router = useRouter();
@@ -21,7 +21,9 @@ export default function FoodDetailsScreen() {
   const source = (params.source as string) || 'search';
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
+  const [servingInfo, setServingInfo] = useState<ServingSizeInfo | null>(null);
   const [grams, setGrams] = useState('100');
+  const [customServingDescription, setCustomServingDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -30,13 +32,13 @@ export default function FoodDetailsScreen() {
         const parsed = JSON.parse(productDataString);
         setProduct(parsed);
         
-        // Try to extract default serving size in grams
-        if (parsed.serving_size) {
-          const match = parsed.serving_size.match(/(\d+\.?\d*)\s*g/i);
-          if (match) {
-            setGrams(match[1]);
-          }
-        }
+        // Extract serving size information from OpenFoodFacts
+        const serving = extractServingSize(parsed);
+        setServingInfo(serving);
+        setGrams(serving.grams.toString());
+        setCustomServingDescription(serving.description);
+        
+        console.log('[FoodDetails] Extracted serving info:', serving);
       } catch (error) {
         console.error('[FoodDetails] Error parsing product data:', error);
         Alert.alert('Error', 'Invalid product data');
@@ -45,7 +47,7 @@ export default function FoodDetailsScreen() {
     }
   }, [productDataString]);
 
-  if (!product) {
+  if (!product || !servingInfo) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
         <View style={styles.loadingContainer}>
@@ -63,7 +65,7 @@ export default function FoodDetailsScreen() {
   const per100gFiber = nutriments['fiber_100g'] || 0;
 
   // Calculate for the specified grams
-  const gramsNum = parseFloat(grams) || 100;
+  const gramsNum = parseFloat(grams) || servingInfo.grams;
   const multiplier = gramsNum / 100;
   
   const calculatedCalories = per100gCalories * multiplier;
@@ -71,6 +73,39 @@ export default function FoodDetailsScreen() {
   const calculatedCarbs = per100gCarbs * multiplier;
   const calculatedFats = per100gFats * multiplier;
   const calculatedFiber = per100gFiber * multiplier;
+
+  // Generate serving description for display
+  const getServingDescription = (): string => {
+    const currentGrams = parseFloat(grams) || servingInfo.grams;
+    
+    // If user hasn't changed the grams, use the original serving description
+    if (Math.abs(currentGrams - servingInfo.grams) < 0.1) {
+      return servingInfo.displayText;
+    }
+    
+    // If the original serving had a unit description (not just grams)
+    if (servingInfo.description !== servingInfo.displayText && !servingInfo.description.match(/^\d+\s*g$/i)) {
+      // Try to scale the serving (e.g., "1 egg" -> "2 eggs", "2 slices" -> "3 slices")
+      const match = servingInfo.description.match(/^(\d+\.?\d*)\s+(.+)$/);
+      if (match) {
+        const originalCount = parseFloat(match[1]);
+        const unit = match[2];
+        const gramsPerUnit = servingInfo.grams / originalCount;
+        const newCount = currentGrams / gramsPerUnit;
+        
+        // If it's close to a whole number, use that
+        if (Math.abs(newCount - Math.round(newCount)) < 0.1) {
+          return `${Math.round(newCount)} ${unit} (${Math.round(currentGrams)} g)`;
+        }
+        
+        // Otherwise show decimal
+        return `${newCount.toFixed(1)} ${unit} (${Math.round(currentGrams)} g)`;
+      }
+    }
+    
+    // Fallback: just show grams
+    return `${Math.round(currentGrams)} g`;
+  };
 
   const handleSave = async () => {
     if (!grams || parseFloat(grams) <= 0) {
@@ -139,7 +174,6 @@ export default function FoodDetailsScreen() {
       }
 
       // Find or create meal for the date and meal type
-      // IMPORTANT: We look for existing meal, not replace it
       const { data: existingMeal } = await supabase
         .from('meals')
         .select('id')
@@ -175,8 +209,14 @@ export default function FoodDetailsScreen() {
         console.log('[FoodDetails] Using existing meal:', mealId);
       }
 
+      // Generate the serving description for storage
+      const finalServingDescription = getServingDescription();
+      const finalGrams = parseFloat(grams);
+
+      console.log('[FoodDetails] Saving with serving description:', finalServingDescription);
+      console.log('[FoodDetails] Grams:', finalGrams);
+
       // ALWAYS INSERT a new meal item (never update existing ones)
-      // This allows multiple foods per meal
       console.log('[FoodDetails] Inserting NEW meal item (not replacing)');
       const { error: mealItemError } = await supabase
         .from('meal_items')
@@ -189,6 +229,8 @@ export default function FoodDetailsScreen() {
           carbs: calculatedCarbs,
           fats: calculatedFats,
           fiber: calculatedFiber,
+          serving_description: finalServingDescription,
+          grams: finalGrams,
         });
 
       if (mealItemError) {
@@ -202,7 +244,6 @@ export default function FoodDetailsScreen() {
       console.log('[FoodDetails] Now navigating back to diary (dismissing all intermediate screens)');
       
       // Navigate back to the home/diary screen
-      // This will close food-details and barcode-scan/food-search in one go
       router.dismissTo('/(tabs)/(home)/');
     } catch (error) {
       console.error('[FoodDetails] Error in handleSave:', error);
@@ -247,9 +288,14 @@ export default function FoodDetailsScreen() {
               </Text>
             )}
             {product.serving_size && (
-              <Text style={[styles.servingSize, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Typical serving: {product.serving_size}
-              </Text>
+              <View style={styles.servingSizeInfo}>
+                <Text style={[styles.servingSizeLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                  Label serving size:
+                </Text>
+                <Text style={[styles.servingSize, { color: colors.primary }]}>
+                  {servingInfo.displayText}
+                </Text>
+              </View>
             )}
             {product.code && (
               <Text style={[styles.barcode, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -260,11 +306,21 @@ export default function FoodDetailsScreen() {
 
           <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
             <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-              Serving Size
+              Your Portion
             </Text>
             <Text style={[styles.servingInfo, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Enter the amount in grams (nutrition values are per 100g)
+              Adjust the amount in grams
             </Text>
+            
+            <View style={styles.servingPreview}>
+              <Text style={[styles.servingPreviewLabel, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Will be logged as:
+              </Text>
+              <Text style={[styles.servingPreviewText, { color: colors.primary }]}>
+                {getServingDescription()}
+              </Text>
+            </View>
+
             <View style={styles.servingInput}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
                 Grams:
@@ -272,7 +328,7 @@ export default function FoodDetailsScreen() {
               <View style={styles.inputRow}>
                 <TextInput
                   style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                  placeholder="100"
+                  placeholder={servingInfo.grams.toString()}
                   placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
                   keyboardType="decimal-pad"
                   value={grams}
@@ -284,27 +340,27 @@ export default function FoodDetailsScreen() {
             <View style={styles.quickButtons}>
               <TouchableOpacity
                 style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-                onPress={() => setGrams('50')}
+                onPress={() => setGrams((servingInfo.grams * 0.5).toString())}
               >
-                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>50g</Text>
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>½</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-                onPress={() => setGrams('100')}
+                onPress={() => setGrams(servingInfo.grams.toString())}
               >
-                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>100g</Text>
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>1x</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-                onPress={() => setGrams('150')}
+                onPress={() => setGrams((servingInfo.grams * 1.5).toString())}
               >
-                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>150g</Text>
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>1.5x</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
-                onPress={() => setGrams('200')}
+                onPress={() => setGrams((servingInfo.grams * 2).toString())}
               >
-                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>200g</Text>
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>2x</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -435,11 +491,18 @@ const styles = StyleSheet.create({
   },
   foodBrand: {
     ...typography.body,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  servingSizeInfo: {
+    marginBottom: spacing.sm,
+  },
+  servingSizeLabel: {
+    ...typography.caption,
+    marginBottom: 2,
   },
   servingSize: {
-    ...typography.caption,
-    marginBottom: spacing.xs,
+    ...typography.bodyBold,
+    fontSize: 16,
   },
   barcode: {
     ...typography.caption,
@@ -452,6 +515,20 @@ const styles = StyleSheet.create({
   servingInfo: {
     ...typography.caption,
     marginBottom: spacing.md,
+  },
+  servingPreview: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  servingPreviewLabel: {
+    ...typography.caption,
+    marginBottom: 4,
+  },
+  servingPreviewText: {
+    ...typography.bodyBold,
+    fontSize: 18,
   },
   servingInput: {
     gap: spacing.xs,

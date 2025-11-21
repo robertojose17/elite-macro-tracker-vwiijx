@@ -67,6 +67,8 @@ export interface MealItem {
   carbs: number;
   fats: number;
   fiber: number;
+  serving_description?: string; // e.g., "1 egg (50 g)", "2 slices (28 g)", "35 g"
+  grams?: number; // actual grams used for this entry
 }
 
 export interface DailySummary {
