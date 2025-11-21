@@ -19,7 +19,7 @@ export default function EditFoodScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [item, setItem] = useState<any>(null);
-  const [quantity, setQuantity] = useState('');
+  const [grams, setGrams] = useState('');
   const [foodName, setFoodName] = useState('');
   const [calories, setCalories] = useState('');
   const [protein, setProtein] = useState('');
@@ -64,21 +64,33 @@ export default function EditFoodScreen() {
 
       console.log('[EditFood] Item loaded:', data);
       setItem(data);
-      setQuantity(data.quantity?.toString() || '1');
       setFoodName(data.foods?.name || '');
       
-      // Calculate per-serving values
-      const perServingCalories = (data.calories || 0) / (data.quantity || 1);
-      const perServingProtein = (data.protein || 0) / (data.quantity || 1);
-      const perServingCarbs = (data.carbs || 0) / (data.quantity || 1);
-      const perServingFats = (data.fats || 0) / (data.quantity || 1);
-      const perServingFiber = (data.fiber || 0) / (data.quantity || 1);
+      // Calculate grams from quantity
+      // If serving_unit is 'g' and serving_amount is 100, then quantity represents the multiplier
+      const servingAmount = data.foods?.serving_amount || 100;
+      const servingUnit = data.foods?.serving_unit || 'g';
+      
+      if (servingUnit === 'g') {
+        const totalGrams = (data.quantity || 1) * servingAmount;
+        setGrams(totalGrams.toString());
+      } else {
+        // For non-gram servings, just use quantity
+        setGrams((data.quantity || 1).toString());
+      }
+      
+      // Calculate per-100g values for display
+      const per100gCalories = (data.foods?.calories || 0);
+      const per100gProtein = (data.foods?.protein || 0);
+      const per100gCarbs = (data.foods?.carbs || 0);
+      const per100gFats = (data.foods?.fats || 0);
+      const per100gFiber = (data.foods?.fiber || 0);
 
-      setCalories(perServingCalories.toFixed(1));
-      setProtein(perServingProtein.toFixed(1));
-      setCarbs(perServingCarbs.toFixed(1));
-      setFats(perServingFats.toFixed(1));
-      setFiber(perServingFiber.toFixed(1));
+      setCalories(per100gCalories.toFixed(1));
+      setProtein(per100gProtein.toFixed(1));
+      setCarbs(per100gCarbs.toFixed(1));
+      setFats(per100gFats.toFixed(1));
+      setFiber(per100gFiber.toFixed(1));
     } catch (error) {
       console.error('[EditFood] Error in loadItem:', error);
       Alert.alert('Error', 'An unexpected error occurred');
@@ -89,8 +101,8 @@ export default function EditFoodScreen() {
   };
 
   const handleSave = async () => {
-    if (!quantity || parseFloat(quantity) <= 0) {
-      Alert.alert('Error', 'Please enter a valid quantity');
+    if (!grams || parseFloat(grams) <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
@@ -102,19 +114,41 @@ export default function EditFoodScreen() {
     setSaving(true);
 
     try {
-      const quantityNum = parseFloat(quantity) || 1;
+      const gramsNum = parseFloat(grams) || 100;
       const caloriesNum = parseFloat(calories) || 0;
       const proteinNum = parseFloat(protein) || 0;
       const carbsNum = parseFloat(carbs) || 0;
       const fatsNum = parseFloat(fats) || 0;
       const fiberNum = parseFloat(fiber) || 0;
 
-      // Calculate total values based on quantity
-      const totalCalories = caloriesNum * quantityNum;
-      const totalProtein = proteinNum * quantityNum;
-      const totalCarbs = carbsNum * quantityNum;
-      const totalFats = fatsNum * quantityNum;
-      const totalFiber = fiberNum * quantityNum;
+      const servingAmount = item.foods?.serving_amount || 100;
+      const servingUnit = item.foods?.serving_unit || 'g';
+
+      // Calculate quantity (multiplier) and total values
+      let quantity = 1;
+      let totalCalories = caloriesNum;
+      let totalProtein = proteinNum;
+      let totalCarbs = carbsNum;
+      let totalFats = fatsNum;
+      let totalFiber = fiberNum;
+
+      if (servingUnit === 'g') {
+        // For gram-based foods, calculate multiplier
+        quantity = gramsNum / servingAmount;
+        totalCalories = caloriesNum * quantity;
+        totalProtein = proteinNum * quantity;
+        totalCarbs = carbsNum * quantity;
+        totalFats = fatsNum * quantity;
+        totalFiber = fiberNum * quantity;
+      } else {
+        // For other units, use grams as quantity directly
+        quantity = gramsNum;
+        totalCalories = caloriesNum * quantity;
+        totalProtein = proteinNum * quantity;
+        totalCarbs = carbsNum * quantity;
+        totalFats = fatsNum * quantity;
+        totalFiber = fiberNum * quantity;
+      }
 
       // If it's a user-created food, update the food entry as well
       if (item?.foods?.user_created) {
@@ -142,7 +176,7 @@ export default function EditFoodScreen() {
       const { error: itemError } = await supabase
         .from('meal_items')
         .update({
-          quantity: quantityNum,
+          quantity: quantity,
           calories: totalCalories,
           protein: totalProtein,
           carbs: totalCarbs,
@@ -196,6 +230,25 @@ export default function EditFoodScreen() {
   }
 
   const isUserCreated = item.foods?.user_created;
+  const servingUnit = item.foods?.serving_unit || 'g';
+  const isGramBased = servingUnit === 'g';
+
+  // Calculate display values
+  const gramsNum = parseFloat(grams) || 100;
+  const caloriesNum = parseFloat(calories) || 0;
+  const proteinNum = parseFloat(protein) || 0;
+  const carbsNum = parseFloat(carbs) || 0;
+  const fatsNum = parseFloat(fats) || 0;
+  const fiberNum = parseFloat(fiber) || 0;
+
+  const servingAmount = item.foods?.serving_amount || 100;
+  const multiplier = isGramBased ? gramsNum / servingAmount : gramsNum;
+
+  const displayCalories = caloriesNum * multiplier;
+  const displayProtein = proteinNum * multiplier;
+  const displayCarbs = carbsNum * multiplier;
+  const displayFats = fatsNum * multiplier;
+  const displayFiber = fiberNum * multiplier;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
@@ -254,34 +307,68 @@ export default function EditFoodScreen() {
                   </Text>
                 )}
                 <Text style={[styles.infoNote, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                  This is a database food. You can only change the quantity.
+                  This is a database food. You can only change the amount.
                 </Text>
               </View>
             )}
 
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Quantity (servings) *
+                {isGramBased ? 'Amount (grams) *' : 'Quantity (servings) *'}
               </Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="1"
-                placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                keyboardType="decimal-pad"
-                value={quantity}
-                onChangeText={setQuantity}
-                returnKeyType="next"
-              />
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                  placeholder={isGramBased ? '100' : '1'}
+                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={grams}
+                  onChangeText={setGrams}
+                  returnKeyType="next"
+                />
+                <Text style={[styles.unitLabel, { color: isDark ? colors.textDark : colors.text }]}>
+                  {isGramBased ? 'g' : servingUnit}
+                </Text>
+              </View>
               <Text style={[styles.helpText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                Serving: {item.foods?.serving_amount || 1} {item.foods?.serving_unit || 'serving'}
+                Base serving: {servingAmount} {servingUnit}
               </Text>
             </View>
+
+            {isGramBased && (
+              <View style={styles.quickButtons}>
+                <TouchableOpacity
+                  style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                  onPress={() => setGrams('50')}
+                >
+                  <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>50g</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                  onPress={() => setGrams('100')}
+                >
+                  <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>100g</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                  onPress={() => setGrams('150')}
+                >
+                  <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>150g</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                  onPress={() => setGrams('200')}
+                >
+                  <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>200g</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           {isUserCreated && (
             <View style={[styles.card, { backgroundColor: isDark ? colors.cardDark : colors.card }]}>
               <Text style={[styles.sectionTitle, { color: isDark ? colors.textDark : colors.text }]}>
-                Nutrition (per serving)
+                Nutrition (per {servingAmount}{servingUnit})
               </Text>
 
               <View style={styles.inputGroup}>
@@ -370,7 +457,7 @@ export default function EditFoodScreen() {
               Total Nutrition
             </Text>
             <Text style={[styles.totalNote, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              For {parseFloat(quantity) || 1} serving(s)
+              For {Math.round(gramsNum)}{isGramBased ? 'g' : ` ${servingUnit}`}
             </Text>
 
             <View style={styles.totalRow}>
@@ -378,7 +465,7 @@ export default function EditFoodScreen() {
                 Calories
               </Text>
               <Text style={[styles.totalValue, { color: colors.calories }]}>
-                {Math.round((parseFloat(calories) || 0) * (parseFloat(quantity) || 1))} kcal
+                {Math.round(displayCalories)} kcal
               </Text>
             </View>
 
@@ -387,7 +474,7 @@ export default function EditFoodScreen() {
                 Protein
               </Text>
               <Text style={[styles.totalValue, { color: colors.protein }]}>
-                {Math.round((parseFloat(protein) || 0) * (parseFloat(quantity) || 1))}g
+                {displayProtein.toFixed(1)}g
               </Text>
             </View>
 
@@ -396,7 +483,7 @@ export default function EditFoodScreen() {
                 Carbs
               </Text>
               <Text style={[styles.totalValue, { color: colors.carbs }]}>
-                {Math.round((parseFloat(carbs) || 0) * (parseFloat(quantity) || 1))}g
+                {displayCarbs.toFixed(1)}g
               </Text>
             </View>
 
@@ -405,7 +492,7 @@ export default function EditFoodScreen() {
                 Fats
               </Text>
               <Text style={[styles.totalValue, { color: colors.fats }]}>
-                {Math.round((parseFloat(fats) || 0) * (parseFloat(quantity) || 1))}g
+                {displayFats.toFixed(1)}g
               </Text>
             </View>
 
@@ -414,7 +501,7 @@ export default function EditFoodScreen() {
                 Fiber
               </Text>
               <Text style={[styles.totalValue, { color: colors.fiber }]}>
-                {Math.round((parseFloat(fiber) || 0) * (parseFloat(quantity) || 1))}g
+                {displayFiber.toFixed(1)}g
               </Text>
             </View>
           </View>
@@ -503,16 +590,43 @@ const styles = StyleSheet.create({
     ...typography.bodyBold,
     marginBottom: spacing.xs,
   },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   input: {
+    flex: 1,
     borderWidth: 1,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
     fontSize: 16,
   },
+  unitLabel: {
+    ...typography.h3,
+    fontSize: 18,
+  },
   helpText: {
     ...typography.caption,
     marginTop: spacing.xs,
+  },
+  quickButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  quickButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickButtonText: {
+    ...typography.bodyBold,
+    fontSize: 14,
   },
   macroRow: {
     flexDirection: 'row',

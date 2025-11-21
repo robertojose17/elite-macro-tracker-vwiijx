@@ -196,32 +196,35 @@ export default function BarcodeScanScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]} edges={['top']}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow_back"
-            size={24}
-            color="#FFFFFF"
-          />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: '#FFFFFF' }]}>
-          Scan Barcode
-        </Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.fullScreenContainer}>
+      <CameraView
+        style={styles.camera}
+        facing="back"
+        barcodeScannerSettings={{
+          barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
+        }}
+        onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+      >
+        <SafeAreaView style={styles.cameraOverlay} edges={['top']}>
+          <View style={styles.headerTransparent}>
+            <TouchableOpacity 
+              onPress={() => router.back()}
+              style={styles.backButton}
+            >
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow_back"
+                size={28}
+                color="#FFFFFF"
+              />
+            </TouchableOpacity>
+            <Text style={styles.titleWhite}>
+              Scan Barcode
+            </Text>
+            <View style={{ width: 28 }} />
+          </View>
 
-      <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          barcodeScannerSettings={{
-            barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39'],
-          }}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        >
-          <View style={styles.overlay}>
+          <View style={styles.scanAreaContainer}>
             <View style={styles.scanArea}>
               <View style={[styles.corner, styles.topLeft]} />
               <View style={[styles.corner, styles.topRight]} />
@@ -231,22 +234,27 @@ export default function BarcodeScanScreen() {
             <Text style={styles.instructionText}>
               Position barcode within the frame
             </Text>
-            {loading && (
-              <View style={styles.loadingOverlay}>
-                <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.loadingText}>Looking up product...</Text>
-              </View>
-            )}
           </View>
-        </CameraView>
-      </View>
-    </SafeAreaView>
+
+          {loading && (
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#FFFFFF" />
+              <Text style={styles.loadingText}>Looking up product...</Text>
+            </View>
+          )}
+        </SafeAreaView>
+      </CameraView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  fullScreenContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
   },
   loadingContainer: {
     flex: 1,
@@ -260,17 +268,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: Platform.OS === 'android' ? spacing.lg : 0,
     paddingBottom: spacing.md,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  headerTransparent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: Platform.OS === 'android' ? spacing.lg : spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  backButton: {
+    padding: spacing.xs,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: borderRadius.full,
   },
   title: {
     ...typography.h3,
     flex: 1,
     textAlign: 'center',
+  },
+  titleWhite: {
+    ...typography.h3,
+    flex: 1,
+    textAlign: 'center',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   permissionContainer: {
     flex: 1,
@@ -336,15 +360,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  cameraContainer: {
-    flex: 1,
-  },
   camera: {
     flex: 1,
   },
-  overlay: {
+  cameraOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  scanAreaContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -393,6 +416,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   loadingOverlay: {
     position: 'absolute',

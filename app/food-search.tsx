@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,9 +22,38 @@ export default function FoodSearchScreen() {
   const [results, setResults] = useState<OpenFoodFactsProduct[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = async () => {
+  // Debounce timer ref
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Live search with debounce
+  useEffect(() => {
+    // Clear previous timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // If search query is empty, clear results
     if (!searchQuery.trim()) {
-      Alert.alert('Error', 'Please enter a search term');
+      setResults([]);
+      setHasSearched(false);
+      return;
+    }
+
+    // Set new timer for debounced search
+    debounceTimerRef.current = setTimeout(() => {
+      performSearch(searchQuery);
+    }, 400); // 400ms debounce
+
+    // Cleanup on unmount
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const performSearch = async (query: string) => {
+    if (!query.trim()) {
       return;
     }
 
@@ -32,8 +61,8 @@ export default function FoodSearchScreen() {
     setHasSearched(true);
 
     try {
-      console.log('[FoodSearch] Searching for:', searchQuery);
-      const data = await searchProducts(searchQuery);
+      console.log('[FoodSearch] Searching for:', query);
+      const data = await searchProducts(query);
       
       if (data && data.products) {
         console.log('[FoodSearch] Found', data.products.length, 'products');
@@ -45,6 +74,7 @@ export default function FoodSearchScreen() {
     } catch (error) {
       console.error('[FoodSearch] Error searching:', error);
       Alert.alert('Error', 'Failed to search for products. Please try again.');
+      setResults([]);
     } finally {
       setSearching(false);
     }
@@ -58,6 +88,7 @@ export default function FoodSearchScreen() {
         meal: mealType,
         date: date,
         productData: JSON.stringify(product),
+        source: 'search',
       },
     });
   };
@@ -89,30 +120,30 @@ export default function FoodSearchScreen() {
           />
           <TextInput
             style={[styles.searchInput, { color: isDark ? colors.textDark : colors.text }]}
-            placeholder="Search for food (e.g., chicken breast)"
+            placeholder="Start typing to search (e.g., chicken)"
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
+            autoFocus={true}
             returnKeyType="search"
           />
-        </View>
-        <TouchableOpacity
-          style={[styles.searchButton, { backgroundColor: colors.primary }]}
-          onPress={handleSearch}
-          disabled={searching}
-        >
-          {searching ? (
-            <ActivityIndicator color="#FFFFFF" size="small" />
-          ) : (
-            <Text style={styles.searchButtonText}>Search</Text>
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <IconSymbol
+                ios_icon_name="xmark.circle.fill"
+                android_material_icon_name="cancel"
+                size={20}
+                color={isDark ? colors.textSecondaryDark : colors.textSecondary}
+              />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         {searching && (
           <View style={styles.loadingContainer}>
@@ -142,7 +173,7 @@ export default function FoodSearchScreen() {
               Search for food
             </Text>
             <Text style={[styles.emptySubtext, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Enter a food name to search the OpenFoodFacts database
+              Start typing to see live results from OpenFoodFacts
             </Text>
           </View>
         )}
@@ -175,7 +206,7 @@ export default function FoodSearchScreen() {
                         </Text>
                       )}
                       <Text style={[styles.resultNutrition, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-                        {Math.round(calories)} kcal • P: {Math.round(protein)}g • C: {Math.round(carbs)}g • F: {Math.round(fats)}g
+                        Per 100g: {Math.round(calories)} kcal • P: {Math.round(protein)}g • C: {Math.round(carbs)}g • F: {Math.round(fats)}g
                       </Text>
                       {product.serving_size && (
                         <Text style={[styles.resultServing, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
@@ -218,13 +249,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   searchContainer: {
-    flexDirection: 'row',
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
-    gap: spacing.sm,
   },
   searchBar: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
@@ -237,19 +265,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     paddingVertical: spacing.xs,
-  },
-  searchButton: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 80,
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 16,
   },
   scrollContent: {
     paddingHorizontal: spacing.md,
@@ -278,6 +293,7 @@ const styles = StyleSheet.create({
   emptySubtext: {
     ...typography.body,
     textAlign: 'center',
+    paddingHorizontal: spacing.lg,
   },
   resultsContainer: {
     gap: spacing.sm,

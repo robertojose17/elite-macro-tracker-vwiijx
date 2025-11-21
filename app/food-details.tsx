@@ -21,7 +21,7 @@ export default function FoodDetailsScreen() {
   const source = (params.source as string) || 'search';
 
   const [product, setProduct] = useState<OpenFoodFactsProduct | null>(null);
-  const [servings, setServings] = useState('1');
+  const [grams, setGrams] = useState('100');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -29,6 +29,14 @@ export default function FoodDetailsScreen() {
       try {
         const parsed = JSON.parse(productDataString);
         setProduct(parsed);
+        
+        // Try to extract default serving size in grams
+        if (parsed.serving_size) {
+          const match = parsed.serving_size.match(/(\d+\.?\d*)\s*g/i);
+          if (match) {
+            setGrams(match[1]);
+          }
+        }
       } catch (error) {
         console.error('[FoodDetails] Error parsing product data:', error);
         Alert.alert('Error', 'Invalid product data');
@@ -48,22 +56,25 @@ export default function FoodDetailsScreen() {
   }
 
   const nutriments = product.nutriments || {};
-  const baseCalories = nutriments['energy-kcal_100g'] || 0;
-  const baseProtein = nutriments['proteins_100g'] || 0;
-  const baseCarbs = nutriments['carbohydrates_100g'] || 0;
-  const baseFats = nutriments['fat_100g'] || 0;
-  const baseFiber = nutriments['fiber_100g'] || 0;
+  const per100gCalories = nutriments['energy-kcal_100g'] || 0;
+  const per100gProtein = nutriments['proteins_100g'] || 0;
+  const per100gCarbs = nutriments['carbohydrates_100g'] || 0;
+  const per100gFats = nutriments['fat_100g'] || 0;
+  const per100gFiber = nutriments['fiber_100g'] || 0;
 
-  const servingMultiplier = parseFloat(servings) || 1;
-  const calculatedCalories = baseCalories * servingMultiplier;
-  const calculatedProtein = baseProtein * servingMultiplier;
-  const calculatedCarbs = baseCarbs * servingMultiplier;
-  const calculatedFats = baseFats * servingMultiplier;
-  const calculatedFiber = baseFiber * servingMultiplier;
+  // Calculate for the specified grams
+  const gramsNum = parseFloat(grams) || 100;
+  const multiplier = gramsNum / 100;
+  
+  const calculatedCalories = per100gCalories * multiplier;
+  const calculatedProtein = per100gProtein * multiplier;
+  const calculatedCarbs = per100gCarbs * multiplier;
+  const calculatedFats = per100gFats * multiplier;
+  const calculatedFiber = per100gFiber * multiplier;
 
   const handleSave = async () => {
-    if (!servings || parseFloat(servings) <= 0) {
-      Alert.alert('Error', 'Please enter a valid serving amount');
+    if (!grams || parseFloat(grams) <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount in grams');
       return;
     }
 
@@ -103,11 +114,11 @@ export default function FoodDetailsScreen() {
             brand: foodData.brand,
             serving_amount: 100, // OpenFoodFacts uses per 100g
             serving_unit: 'g',
-            calories: baseCalories,
-            protein: baseProtein,
-            carbs: baseCarbs,
-            fats: baseFats,
-            fiber: baseFiber,
+            calories: per100gCalories,
+            protein: per100gProtein,
+            carbs: per100gCarbs,
+            fats: per100gFats,
+            fiber: per100gFiber,
             barcode: product.code,
             user_created: false,
           })
@@ -157,13 +168,13 @@ export default function FoodDetailsScreen() {
         mealId = newMeal.id;
       }
 
-      // Add meal item
+      // Add meal item with calculated values based on grams
       const { error: mealItemError } = await supabase
         .from('meal_items')
         .insert({
           meal_id: mealId,
           food_id: foodId,
-          quantity: servingMultiplier,
+          quantity: multiplier, // Store as multiplier (e.g., 1.5 for 150g)
           calories: calculatedCalories,
           protein: calculatedProtein,
           carbs: calculatedCarbs,
@@ -181,17 +192,7 @@ export default function FoodDetailsScreen() {
       console.log('[FoodDetails] Food added successfully');
       
       // Navigate back to diary
-      // Use router.back() multiple times to get back to the diary
-      // This ensures we go back through the navigation stack properly
-      Alert.alert('Success', 'Food added to your diary!', [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Navigate back to home/diary
-            router.push('/(tabs)/(home)/');
-          },
-        },
-      ]);
+      router.replace('/(tabs)/(home)/');
     } catch (error) {
       console.error('[FoodDetails] Error in handleSave:', error);
       Alert.alert('Error', 'An unexpected error occurred');
@@ -235,6 +236,11 @@ export default function FoodDetailsScreen() {
                 {product.brands}
               </Text>
             )}
+            {product.serving_size && (
+              <Text style={[styles.servingSize, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Typical serving: {product.serving_size}
+              </Text>
+            )}
             {product.code && (
               <Text style={[styles.barcode, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
                 Barcode: {product.code}
@@ -247,20 +253,49 @@ export default function FoodDetailsScreen() {
               Serving Size
             </Text>
             <Text style={[styles.servingInfo, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              Nutrition values are per 100g
+              Enter the amount in grams (nutrition values are per 100g)
             </Text>
             <View style={styles.servingInput}>
               <Text style={[styles.label, { color: isDark ? colors.textDark : colors.text }]}>
-                Number of 100g servings:
+                Grams:
               </Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
-                placeholder="1"
-                placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
-                keyboardType="decimal-pad"
-                value={servings}
-                onChangeText={setServings}
-              />
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.backgroundDark : colors.background, borderColor: isDark ? colors.borderDark : colors.border, color: isDark ? colors.textDark : colors.text }]}
+                  placeholder="100"
+                  placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondary}
+                  keyboardType="decimal-pad"
+                  value={grams}
+                  onChangeText={setGrams}
+                />
+                <Text style={[styles.unitLabel, { color: isDark ? colors.textDark : colors.text }]}>g</Text>
+              </View>
+            </View>
+            <View style={styles.quickButtons}>
+              <TouchableOpacity
+                style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                onPress={() => setGrams('50')}
+              >
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>50g</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                onPress={() => setGrams('100')}
+              >
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>100g</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                onPress={() => setGrams('150')}
+              >
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>150g</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickButton, { backgroundColor: isDark ? colors.backgroundDark : colors.background }]}
+                onPress={() => setGrams('200')}
+              >
+                <Text style={[styles.quickButtonText, { color: isDark ? colors.textDark : colors.text }]}>200g</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -269,7 +304,7 @@ export default function FoodDetailsScreen() {
               Nutrition Facts
             </Text>
             <Text style={[styles.nutritionNote, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
-              For {servingMultiplier} × 100g = {Math.round(servingMultiplier * 100)}g
+              For {Math.round(gramsNum)}g
             </Text>
 
             <View style={styles.nutritionGrid}>
@@ -287,7 +322,7 @@ export default function FoodDetailsScreen() {
                   Protein
                 </Text>
                 <Text style={[styles.nutritionValue, { color: colors.protein }]}>
-                  {Math.round(calculatedProtein)}g
+                  {calculatedProtein.toFixed(1)}g
                 </Text>
               </View>
 
@@ -296,7 +331,7 @@ export default function FoodDetailsScreen() {
                   Carbs
                 </Text>
                 <Text style={[styles.nutritionValue, { color: colors.carbs }]}>
-                  {Math.round(calculatedCarbs)}g
+                  {calculatedCarbs.toFixed(1)}g
                 </Text>
               </View>
 
@@ -305,7 +340,7 @@ export default function FoodDetailsScreen() {
                   Fats
                 </Text>
                 <Text style={[styles.nutritionValue, { color: colors.fats }]}>
-                  {Math.round(calculatedFats)}g
+                  {calculatedFats.toFixed(1)}g
                 </Text>
               </View>
 
@@ -314,9 +349,18 @@ export default function FoodDetailsScreen() {
                   Fiber
                 </Text>
                 <Text style={[styles.nutritionValue, { color: colors.fiber }]}>
-                  {Math.round(calculatedFiber)}g
+                  {calculatedFiber.toFixed(1)}g
                 </Text>
               </View>
+            </View>
+
+            <View style={styles.per100gInfo}>
+              <Text style={[styles.per100gTitle, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                Per 100g:
+              </Text>
+              <Text style={[styles.per100gText, { color: isDark ? colors.textSecondaryDark : colors.textSecondary }]}>
+                {Math.round(per100gCalories)} kcal • P: {per100gProtein.toFixed(1)}g • C: {per100gCarbs.toFixed(1)}g • F: {per100gFats.toFixed(1)}g
+              </Text>
             </View>
           </View>
 
@@ -328,7 +372,7 @@ export default function FoodDetailsScreen() {
             {saving ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.saveButtonText}>Add to Diary</Text>
+              <Text style={styles.saveButtonText}>Add to {mealType.charAt(0).toUpperCase() + mealType.slice(1)}</Text>
             )}
           </TouchableOpacity>
 
@@ -383,6 +427,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     marginBottom: spacing.xs,
   },
+  servingSize: {
+    ...typography.caption,
+    marginBottom: spacing.xs,
+  },
   barcode: {
     ...typography.caption,
     fontStyle: 'italic',
@@ -397,16 +445,44 @@ const styles = StyleSheet.create({
   },
   servingInput: {
     gap: spacing.xs,
+    marginBottom: spacing.md,
   },
   label: {
     ...typography.bodyBold,
   },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   input: {
+    flex: 1,
     borderWidth: 1,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    fontSize: 16,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  unitLabel: {
+    ...typography.h3,
+    fontSize: 18,
+  },
+  quickButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  quickButton: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickButtonText: {
+    ...typography.bodyBold,
+    fontSize: 14,
   },
   nutritionNote: {
     ...typography.caption,
@@ -430,6 +506,20 @@ const styles = StyleSheet.create({
   nutritionValue: {
     ...typography.bodyBold,
     fontSize: 18,
+  },
+  per100gInfo: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+  },
+  per100gTitle: {
+    ...typography.caption,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  per100gText: {
+    ...typography.caption,
   },
   saveButton: {
     borderRadius: borderRadius.md,
